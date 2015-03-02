@@ -1,4 +1,4 @@
-``codetransformer 0.1.0``
+``codetransformer 0.1``
 =========================
 
 Bytecode transformers for CPython inspired by the ``ast`` module's
