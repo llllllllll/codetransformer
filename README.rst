@@ -1,5 +1,5 @@
 ``codetransformer 0.1.0``
-==============
+=========================
 
 Bytecode transformers for CPython inspired by the ``ast`` module's
 ``NodeTransformer``.
