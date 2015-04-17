@@ -1,5 +1,7 @@
 from abc import ABCMeta, abstractproperty
+from ctypes import py_object, pythonapi, c_int
 from dis import Bytecode, opname, opmap, hasjabs, hasjrel, HAVE_ARGUMENT
+import operator
 from types import CodeType
 
 # Opcodes with attribute access.
@@ -21,20 +23,27 @@ def _sparse_args(instrs):
             yield None
 
 
+_optimize = pythonapi.PyCode_Optimize
+_optimize.argtypes = (py_object,) * 4
+_optimize.restype = py_object
+
+_stack_effect = pythonapi.PyCompile_OpcodeStackEffect
+_stack_effect.argtypes = c_int, c_int
+_stack_effect.restype = c_int
+
+
+def _scanl(f, n, ns):
+    yield n
+    for m in ns:
+        n = f(n, m)
+        yield n
+
+
 class CodeTransformer(object, metaclass=ABCMeta):
     """
     A code object transformer, simmilar to the AstTransformer from the ast
     module.
     """
-
-    # TODO: Calculate this for the user.
-    @abstractproperty
-    def stack_modifier(self):
-        """
-        How much does this transformer affect the maximum stack usage.
-        """
-        return 0
-
     def __init__(self):
         self._instrs = None
         self._consts = None
@@ -121,17 +130,38 @@ class CodeTransformer(object, metaclass=ABCMeta):
             (),
         )))
 
+        code = b''.join(
+            (instr or b'') and instr.to_bytecode(self) for instr in self
+        )
+        consts = sorted(self._consts, key=lambda c: self._consts[c])
+        names = tuple(self.visit_name(n) for n in co.co_names)
+
+        # Run the optimizer over the new code.
+        code = _optimize(
+            code,
+            consts,
+            names,
+            co.co_lnotab,
+        )
+
+        # Compute the stack effect of the new code.
+        stack_effect = max(
+            _scanl(
+                operator.add,
+                0,
+                (_stack_effect(instr.opcode, instr.arg or 0)
+                 for instr in Instruction.from_bytes(code))),
+        )
+
         return CodeType(
             co.co_argcount,
             co.co_kwonlyargcount,
             co.co_nlocals,
-            co.co_stacksize + self.stack_modifier,
+            stack_effect,
             co.co_flags,
-            b''.join(
-                (instr or b'') and instr.to_bytecode(self) for instr in self
-            ),
-            tuple(sorted(self._consts, key=lambda c: self._consts[c])),
-            tuple(self.visit_name(n) for n in co.co_names),
+            code,
+            tuple(consts),
+            names,
             tuple(self.visit_varname(n) for n in co.co_varnames),
             co.co_filename,
             name if name is not None else co.co_name,
@@ -234,3 +264,22 @@ class Instruction(object):
         """
         instr._stolen_by = self
         return self
+
+    @classmethod
+    def from_bytes(cls, bs):
+        it = iter(bs)
+        for b in it:
+            try:
+                opname[b]
+            except KeyError:
+                raise ValueError('Invalid opcode: {0!d}'.format(b))
+
+            arg = None
+            if b >= HAVE_ARGUMENT:
+                arg = int.from_bytes(
+                    next(it).to_bytes(1, 'little') +
+                    next(it).to_bytes(1, 'little'),
+                    'little',
+                )
+
+            yield cls(b, arg)
