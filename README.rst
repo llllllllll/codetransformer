@@ -75,16 +75,6 @@ The ``LOAD_CONST`` method of a ``CodeTransformer`` is a shortcut that returns a
 ``LOAD_CONST`` instruction object with the argument as the index of the object
 passed.
 
-``stack_modifier``
-^^^^^^^^^^^^^^^^^^
-
-Python code objects need to know the maximum amount of objects that will be on
-the stack at one time. ``stack_modifier`` is a property that is added to the
-``co_stacksize`` of the input code to return the new maximum stacksize.
-
-Currently there is work being done to generate this from arbitrary code
-sequences.
-
 ``steal``
 ^^^^^^^^^
 
