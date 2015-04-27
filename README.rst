@@ -85,5 +85,74 @@ instruction ``b`` and instruction ``c`` steals ``b``, then ``a`` will jump to
 but want to preserve jumps.
 
 
+Utilities
+~~~~~~~~~
+
+``asconstants``
+^^^^^^^^^^^^^^^
+
+This decorator will inline objects into a piece of code so that the names do
+not need to be looked up at runtime.
+
+Example:
+
+.. code-block:: python
+
+   >>> from codetransformer import asconstants
+   >>> @asconstants(a=1)
+   >>> def f():
+   ...     return a
+   ...
+   >>> f()
+   1
+   >>> a = 5
+   >>> f()
+   1
+
+
+This will work in a fresh session where ``a`` is not defined because the name
+``a`` will be inlined with the constant value: ``1``. If ``a`` is defined, it
+will still be overridden with the new value.
+
+This decorator can also take a variable amount of of builtin names:
+
+.. code-block:: python
+
+   >>> tuple = None
+   >>> @asconstants('tuple', 'list')
+   ... def f(a):
+   ...     if a:
+   ...         return tuple
+   ...     return list
+   ...
+   >>> f(True) is tuple
+   False
+
+
+These strings are take as the original builtin values, even if they have been
+overridden. These will still be faster than doing a global lookup to find the
+object. If no arguments are passed, it means: assume all the builtin names are
+constants.
+
+
+``with_code_transformation``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This is a factory that converts ``CodeTransformer`` instances into function
+decorators. For example:
+
+.. code-block:: python
+
+   >>> @with_code_transformation(MyCodeTransformer())
+   ... def f():
+   ...    # function logic
+   ...    ...
+   ...
+
+
+This takes binds ``f`` to a function who's ``__code__`` object has been
+transformed with an instance of ``MyCodeTransformer``.
+
+
 .. _lazy: https://github.com/llllllllll/lazy_python
 .. _opcode: https://docs.python.org/3.5/library/dis.html#opcode-NOP
