@@ -80,14 +80,14 @@ class CodeTransformer(object, metaclass=ABCMeta):
 
         yield from getattr(self, 'visit_' + instr.opname, lambda *a: a)(instr)
 
-    def visit_const(self, const):
+    def visit_consts(self, consts):
         """
         Override this method to transform the `co_consts` of the code object.
         """
-        if isinstance(const, CodeType):
-            return type(self).visit(const)
-        else:
-            return const
+        return tuple(
+            type(self).visit(const) if isinstance(const, CodeType) else const
+            for const in consts
+        )
 
     def _id(self, obj):
         """
@@ -96,10 +96,11 @@ class CodeTransformer(object, metaclass=ABCMeta):
         return obj
 
     visit_name = _id
-    visit_varname = _id
-    visit_freevar = _id
-    visit_cellvar = _id
-    visit_default = _id
+    visit_names = _id
+    visit_varnames = _id
+    visit_freevars = _id
+    visit_cellvars = _id
+    visit_defaults = _id
 
     del _id
 
@@ -119,10 +120,11 @@ class CodeTransformer(object, metaclass=ABCMeta):
         )))
 
         self._consts = {
-            self.visit_const(k): idx for idx, k in enumerate(co.co_consts)
+            c: idx for idx, c in enumerate(self.visit_consts(co.co_consts))
         }
 
         self._const_idx = len(co.co_consts)  # used for adding new consts.
+        self._clean_co = co
 
         # Apply the transforms.
         self._instrs = tuple(_sparse_args(sum(
@@ -134,7 +136,7 @@ class CodeTransformer(object, metaclass=ABCMeta):
             (instr or b'') and instr.to_bytecode(self) for instr in self
         )
         consts = sorted(self._consts, key=lambda c: self._consts[c])
-        names = tuple(self.visit_name(n) for n in co.co_names)
+        names = tuple(self.visit_names(co.co_names))
 
         # Run the optimizer over the new code.
         code = _optimize(
@@ -162,13 +164,13 @@ class CodeTransformer(object, metaclass=ABCMeta):
             code,
             tuple(consts),
             names,
-            tuple(self.visit_varname(n) for n in co.co_varnames),
+            tuple(self.visit_varnames(co.co_varnames)),
             co.co_filename,
-            name if name is not None else co.co_name,
+            self.visit_name(name if name is not None else co.co_name),
             co.co_firstlineno,
             co.co_lnotab,
-            tuple(self.visit_freevar(c) for c in co.co_freevars),
-            tuple(self.visit_cellvar(c) for c in co.co_cellvars),
+            tuple(self.visit_freevars(co.co_freevars)),
+            tuple(self.visit_cellvars(co.co_cellvars)),
         )
 
     def __repr__(self):
