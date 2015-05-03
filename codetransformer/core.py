@@ -1,8 +1,8 @@
-from abc import ABCMeta, abstractproperty
+from abc import ABCMeta
 from ctypes import py_object, pythonapi, c_int
 from dis import Bytecode, opname, opmap, hasjabs, hasjrel, HAVE_ARGUMENT
 import operator
-from types import CodeType
+from types import CodeType, FunctionType
 
 # Opcodes with attribute access.
 ops = type(
@@ -37,6 +37,16 @@ def _scanl(f, n, ns):
     for m in ns:
         n = f(n, m)
         yield n
+
+
+def _calculate_stack_effect(code):
+    return max(
+        _scanl(
+            operator.add,
+            0,
+            (_stack_effect(instr.opcode, instr.arg or 0)
+             for instr in Instruction.from_bytes(code))),
+    )
 
 
 class CodeTransformer(object, metaclass=ABCMeta):
@@ -104,7 +114,7 @@ class CodeTransformer(object, metaclass=ABCMeta):
 
     del _id
 
-    def visit(self, co, name=None):
+    def visit(self, co, *, name=None):
         """
         Visit a code object, applying the transforms.
         """
@@ -146,20 +156,11 @@ class CodeTransformer(object, metaclass=ABCMeta):
             co.co_lnotab,
         )
 
-        # Compute the stack effect of the new code.
-        stack_effect = max(
-            _scanl(
-                operator.add,
-                0,
-                (_stack_effect(instr.opcode, instr.arg or 0)
-                 for instr in Instruction.from_bytes(code))),
-        )
-
         return CodeType(
             co.co_argcount,
             co.co_kwonlyargcount,
             co.co_nlocals,
-            stack_effect,
+            _calculate_stack_effect(code),
             co.co_flags,
             code,
             tuple(consts),
@@ -171,6 +172,16 @@ class CodeTransformer(object, metaclass=ABCMeta):
             co.co_lnotab,
             tuple(self.visit_freevars(co.co_freevars)),
             tuple(self.visit_cellvars(co.co_cellvars)),
+        )
+
+    def __call__(self, f):
+        # Callable so that we can use CodeTransformers as decorators.
+        return FunctionType(
+            self.visit(f.__code__),
+            f.__globals__,
+            f.__name__,
+            f.__defaults__,
+            f.__closure__,
         )
 
     def __repr__(self):

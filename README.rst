@@ -47,14 +47,16 @@ These methods are passed an ``Instruction`` object as the argument.
 Code objects also have some data other than their bytecode. We can act on these
 things as well.
 
-These methods are passed the type that occupied the given field.
+The following methods act in the form of ``visit_*`` -> ``co_*``, for example,
+``visit_name`` acts on the ``co_name`` field.
 
-1. ``visit_name``: A transformer for the ``co_names`` field.
-2. ``visit_varname``: A transformer for the ``co_varnames`` field.
-3. ``visit_freevar``: A transformer for the ``co_freevars`` field.
-4. ``visit_cellvar``: A transformer for the ``co_cellvars`` field.
-5. ``visit_default``: A transformer for the ``co_defaults`` field.
-6. ``visit_const``: A transformer for the ``co_consts`` field.
+1. ``visit_name``
+2. ``visit_names``
+3. ``visit_varnames``
+4. ``visit_freevars``
+5. ``visit_cellvars``
+6. ``visit_defaults``
+7. ``visit_consts``
 
 A note about ``visit_const``: One should be sure to call
 ``super().visit_const(const)`` inside of their definiton to recursivly apply
@@ -85,7 +87,23 @@ instruction ``b`` and instruction ``c`` steals ``b``, then ``a`` will jump to
 but want to preserve jumps.
 
 
-Utilities
+Applying a Transformer to a Function
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An instance of ``CodeTransformer`` is callable, accepting a function and
+returning a new function with the bytecode modified based on the rules of the
+transformer. This allows a ``CodeTransformer`` to be used as a decorator, for
+example:
+
+.. code-block:: python
+
+   >>> @mytransformer()
+   ... def f(*args):
+   ...     ...
+   ...     return None
+
+
+Included Transformers
 ~~~~~~~~~
 
 ``asconstants``
@@ -98,7 +116,7 @@ Example:
 
 .. code-block:: python
 
-   >>> from codetransformer import asconstants
+   >>> from codetransformer.transformers import asconstants
    >>> @asconstants(a=1)
    >>> def f():
    ...     return a
@@ -134,24 +152,52 @@ overridden. These will still be faster than doing a global lookup to find the
 object. If no arguments are passed, it means: assume all the builtin names are
 constants.
 
+``optimize``
+^^^^^^^^^^^^
 
-``with_code_transformation``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-This is a factory that converts ``CodeTransformer`` instances into function
-decorators. For example:
+The CPython peephole optimizer is only run once over the bytecode; however,
+sometimes some optimizations do not present themselves until a second pass has
+been made. One example of this is De Morgan's Laws. Using the following code as
+an example:
 
 .. code-block:: python
 
-   >>> @with_code_transformation(MyCodeTransformer())
-   ... def f():
-   ...    # function logic
-   ...    ...
+   >>> from dis import dis
+   >>> def f(a, b):
+   ...     if not a and not b: return None
    ...
+   >>> dis(f)
+   2           0 LOAD_FAST                0 (a)
+               3 UNARY_NOT
+               4 POP_JUMP_IF_FALSE       18
+               7 LOAD_FAST                1 (b)
+              10 UNARY_NOT
+              11 POP_JUMP_IF_FALSE       18
+              14 LOAD_CONST               0 (None)
+              17 RETURN_VALUE
+         >>   18 LOAD_CONST               0 (None)
+              21 RETURN_VALUE
+   >>> from codetransformer.transformers import optimize
+   >>> @optimize()
+   ... def g(a, b):
+   ...     if not a and not b: return None
+   ...
+   >>> dis(g)
+   3           0 LOAD_FAST                0 (a)
+               3 POP_JUMP_IF_TRUE        16
+               6 LOAD_FAST                1 (b)
+               9 POP_JUMP_IF_TRUE        16
+              12 LOAD_CONST               0 (None)
+              15 RETURN_VALUE
+         >>   16 LOAD_CONST               0 (None)
+              19 RETURN_VALUE
 
 
-This takes binds ``f`` to a function who's ``__code__`` object has been
-transformed with an instance of ``MyCodeTransformer``.
+This shows that we can get a pretty decent win for no effort at all.
+The ``optimize`` transformer takes a keyword argument: ``passes``, that denotes
+the number of passes of the peephole optimizer to run. Just like this
+optimization is ironed out on the second pass, there may exist some that
+require 2 or 3 passes to work.
 
 
 .. _lazy: https://github.com/llllllllll/lazy_python

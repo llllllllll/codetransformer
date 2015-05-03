@@ -1,10 +1,23 @@
 import builtins
 
-from codetransformer.base import CodeTransformer
-from codetransformer.utils import with_code_transformation
+from codetransformer.core import CodeTransformer
 
 
-class constnames(CodeTransformer):
+class asconstants(CodeTransformer):
+    """
+    A code transformer that inlines names as constants.
+
+    >>> from codetransformer.transformers import asconstants
+    >>> @asconstants(a=1)
+    >>> def f():
+    ...     return a
+    ...
+    >>> f()
+    1
+    >>> a = 5
+    >>> f()
+    1
+    """
     def __init__(self, *args, **kwargs):
         bltins = vars(builtins)
         if not (args or kwargs):
@@ -34,10 +47,3 @@ class constnames(CodeTransformer):
         yield self.LOAD_CONST(self._constnames[name]).steal(instr)
 
     visit_LOAD_GLOBAL = visit_LOAD_NAME
-
-
-def asconstants(*args, **kwargs):
-    """
-    Binds the given names as constants.
-    """
-    return with_code_transformation(constnames(*args, **kwargs))
