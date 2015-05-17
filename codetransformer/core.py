@@ -31,12 +31,20 @@ _stack_effect = pythonapi.PyCompile_OpcodeStackEffect
 _stack_effect.argtypes = c_int, c_int
 _stack_effect.restype = c_int
 
+_cell_new = pythonapi.PyCell_New
+_cell_new.argtypes = (py_object,)
+_cell_new.restype = py_object
+
 
 def _scanl(f, n, ns):
     yield n
     for m in ns:
         n = f(n, m)
         yield n
+
+
+def _a_if_not_none(a, b):
+    return a if a is not None else b
 
 
 def _calculate_stack_effect(code):
@@ -174,14 +182,20 @@ class CodeTransformer(object, metaclass=ABCMeta):
             tuple(self.visit_cellvars(co.co_cellvars)),
         )
 
-    def __call__(self, f):
+    def __call__(self, f, *,
+                 globals_=None, name=None, defaults=None, closure=None):
         # Callable so that we can use CodeTransformers as decorators.
+        if closure is not None:
+            closure = tuple(map(_cell_new, closure))
+        else:
+            closure = f.__closure__
+
         return FunctionType(
             self.visit(f.__code__),
-            f.__globals__,
-            f.__name__,
-            f.__defaults__,
-            f.__closure__,
+            _a_if_not_none(globals_, f.__globals__),
+            _a_if_not_none(name, f.__name__),
+            _a_if_not_none(defaults, f.__defaults__),
+            closure,
         )
 
     def __repr__(self):
