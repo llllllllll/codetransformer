@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from distutils.core import setup
+from setuptools import setup, find_packages
 import sys
 
 long_description = ''
@@ -10,13 +10,11 @@ if 'upload' in sys.argv:
 
 setup(
     name='codetransformer',
-    version='0.4.0',
+    version='0.4.1',
     description='Python code object transformers',
     author='Joe Jevnik',
     author_email='joejev@gmail.com',
-    packages=[
-        'codetransformer',
-    ],
+    packages=find_packages(),
     long_description=long_description,
     license='GPL-2',
     classifiers=[
