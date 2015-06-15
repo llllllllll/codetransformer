@@ -62,9 +62,10 @@ class CodeTransformer(object, metaclass=ABCMeta):
     A code object transformer, simmilar to the AstTransformer from the ast
     module.
     """
-    def __init__(self):
+    def __init__(self, optimize=True):
         self._instrs = None
         self._consts = None
+        self._optimize = optimize
 
     def __getitem__(self, idx):
         return self._instrs[idx]
@@ -85,11 +86,11 @@ class CodeTransformer(object, metaclass=ABCMeta):
         and given a new const index.
         """
         try:
-            return self._consts[obj]
+            return self._consts[obj][0]
         except KeyError:
-            self._consts[obj] = ret = self._const_idx
+            self._consts[obj] = ret = [self._const_idx]
             self._const_idx += 1
-            return ret
+            return ret[0]
 
     def visit_generic(self, instr):
         if instr is None:
@@ -137,9 +138,9 @@ class CodeTransformer(object, metaclass=ABCMeta):
             instr and instr._with_jmp_arg(self) for instr in self._instrs
         )))
 
-        self._consts = {
-            c: idx for idx, c in enumerate(self.visit_consts(co.co_consts))
-        }
+        self._consts = consts = {}
+        for n, const in enumerate(self.visit_consts(co.co_consts)):
+            consts.setdefault(const, []).append(n)
 
         self._const_idx = len(co.co_consts)  # used for adding new consts.
         self._clean_co = co
@@ -153,16 +154,22 @@ class CodeTransformer(object, metaclass=ABCMeta):
         code = b''.join(
             (instr or b'') and instr.to_bytecode(self) for instr in self
         )
-        consts = sorted(self._consts, key=lambda c: self._consts[c])
+
+        consts = [None] * self._const_idx
+        for const, idxs in self._consts.items():
+            for idx in idxs:
+                consts[idx] = const
+
         names = tuple(self.visit_names(co.co_names))
 
-        # Run the optimizer over the new code.
-        code = _optimize(
-            code,
-            consts,
-            names,
-            co.co_lnotab,
-        )
+        if self._optimize:
+            # Run the optimizer over the new code.
+            code = _optimize(
+                code,
+                consts,
+                names,
+                co.co_lnotab,
+            )
 
         return CodeType(
             co.co_argcount,
@@ -217,6 +224,12 @@ class Instruction(object):
     An abstraction of an instruction.
     """
     def __init__(self, opcode, arg=None):
+        if opcode >= HAVE_ARGUMENT and arg is None:
+            raise TypeError(
+                'Instruction {name} expects an argument'.format(
+                    name=opname[opcode],
+                ),
+            )
         self.opcode = opcode
         self.arg = arg
         self.reljmp = False
