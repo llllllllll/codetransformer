@@ -10,7 +10,7 @@ if 'upload' in sys.argv:
 
 setup(
     name='codetransformer',
-    version='0.4.2',
+    version='0.4.3',
     description='Python code object transformers',
     author='Joe Jevnik',
     author_email='joejev@gmail.com',
