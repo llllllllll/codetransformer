@@ -290,7 +290,7 @@ class Instruction(object):
 
     def __repr__(self):
         arg = self.arg
-        return '<{cls}: {opname}{arg}>'.format(
+        return '<{cls}: {opname}({arg})>'.format(
             cls=type(self).__name__,
             opname=self.opname,
             arg=': ' + str(arg) if self.arg is not None else '',
