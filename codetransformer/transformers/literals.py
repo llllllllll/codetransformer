@@ -69,3 +69,30 @@ class overloaded_bytes(CodeTransformer):
                 for const in consts
             )
         )
+
+
+class overloaded_floats(CodeTransformer):
+    """
+    Decorator that applies a callable to each float literal in the decorated
+    function.
+
+    Parameters
+    ----------
+    f : callable
+        A callable to be applied to each float literal in the decorated
+        function.
+    """
+
+    def __init__(self, f):
+        super().__init__()
+        self.f = f
+
+    def visit_consts(self, consts):
+        return super().visit_consts(
+            tuple(
+                self.visit_consts(const) if isinstance(const, tuple)
+                else self.f(const) if isinstance(const, float)
+                else const
+                for const in consts
+            )
+        )
