@@ -44,7 +44,30 @@ class ordereddict_literals(CodeTransformer):
         # TOS  = m
 
 
-class overloaded_bytes(CodeTransformer):
+class OverloadedLiteralTransformer(CodeTransformer):
+
+    def __init__(self, f):
+        self.f = f
+        super().__init__()
+
+    def visit_consts(self, consts):
+        return super().visit_consts(
+            tuple(
+                # This is all one expression.
+                frozenset(self.visit_consts(tuple(const)))
+                if isinstance(const, frozenset)
+                else self.visit_consts(const)
+                if isinstance(const, tuple)
+                else self.f(const)
+                if isinstance(const, self._type)
+                else const
+                ###
+                for const in consts
+            )
+        )
+
+
+class overloaded_bytes(OverloadedLiteralTransformer):
     """
     Decorator that applies a callable to each bytes literal in the decorated
     function.
@@ -55,23 +78,10 @@ class overloaded_bytes(CodeTransformer):
         A callable to be applied to each bytes literal in the decorated
         function.
     """
-
-    def __init__(self, f):
-        super().__init__()
-        self.f = f
-
-    def visit_consts(self, consts):
-        return super().visit_consts(
-            tuple(
-                self.visit_consts(const) if isinstance(const, tuple)
-                else self.f(const) if isinstance(const, bytes)
-                else const
-                for const in consts
-            )
-        )
+    _type = bytes
 
 
-class overloaded_floats(CodeTransformer):
+class overloaded_floats(OverloadedLiteralTransformer):
     """
     Decorator that applies a callable to each float literal in the decorated
     function.
@@ -82,17 +92,4 @@ class overloaded_floats(CodeTransformer):
         A callable to be applied to each float literal in the decorated
         function.
     """
-
-    def __init__(self, f):
-        super().__init__()
-        self.f = f
-
-    def visit_consts(self, consts):
-        return super().visit_consts(
-            tuple(
-                self.visit_consts(const) if isinstance(const, tuple)
-                else self.f(const) if isinstance(const, float)
-                else const
-                for const in consts
-            )
-        )
+    _type = float
