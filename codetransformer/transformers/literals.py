@@ -42,3 +42,30 @@ class ordereddict_literals(CodeTransformer):
 
         yield Instruction(ops.STORE_SUBSCR)
         # TOS  = m
+
+
+class overloaded_bytes(CodeTransformer):
+    """
+    Decorator that applies a callable to each bytes literal in the decorated
+    function.
+
+    Parameters
+    ----------
+    f : callable
+        A callable to be applied to each bytes literal in the decorated
+        function.
+    """
+
+    def __init__(self, f):
+        super().__init__()
+        self.f = f
+
+    def visit_consts(self, consts):
+        return super().visit_consts(
+            tuple(
+                self.visit_consts(const) if isinstance(const, tuple)
+                else self.f(const) if isinstance(const, bytes)
+                else const
+                for const in consts
+            )
+        )
