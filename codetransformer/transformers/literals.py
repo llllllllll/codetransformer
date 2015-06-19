@@ -5,13 +5,50 @@ from textwrap import dedent
 from codetransformer import CodeTransformer, instructions
 
 
-class ordereddict_literals(CodeTransformer):
+class overloaded_dicts(CodeTransformer):
+    """Transformer that allows us to overload dictionary literals.
+
+    This acts by creating an empty map and then inserting every
+    key value pair in order.
+
+    The code that is generated will turn something like:
+
+    {k_0: v_0, k_1: v_1, ..., k_n: v_n}
+
+    into:
+
+    _tmp = astype()
+    _tmp[k_0] = v_0
+    _tmp[k_1] = v_1
+    ...
+    _tmp[k_n] = v_n
+    _tmp  # leaves the map on the stack.
+
+    Parameters
+    ----------
+    astype : callable
+        The constructor for the type to create.
+
+    Examples
+    --------
+    >>> from collections import OrderedDict
+    >>> ordereddict_literals = overloaded_dicts(OrderedDict)
+    >>> @ordereddict_literals
+    >>> def f():
+    ...     return {'a': 1, 'b': 2, 'c': 3}
+    ...
+    >>> f()
+    OrderedDict([('a', 1), ('b', 2), ('c', 3)])
+    """
+    def __init__(self, astype):
+        self._astype = astype
+
     def visit_BUILD_MAP(self, instr):
-        yield self.LOAD_CONST(OrderedDict).steal(instr)
-        # TOS  = OrderedDict
+        yield self.LOAD_CONST(self._astype).steal(instr)
+        # TOS  = self._astype
 
         yield instructions.CALL_FUNCTION(0)
-        # TOS  = m = OrderedDict()
+        # TOS  = m = self._astype()
 
         yield from (instructions.DUP_TOP(),) * instr.arg
         # TOS  = m
@@ -44,6 +81,9 @@ class ordereddict_literals(CodeTransformer):
 
         yield instructions.STORE_SUBSCR()
         # TOS  = m
+
+
+ordereddict_literals = overloaded_dicts(OrderedDict)
 
 
 def _format_constant_docstring(type_):
