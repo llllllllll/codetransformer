@@ -63,7 +63,7 @@ class CodeTransformer(object, metaclass=ABCMeta):
     A code object transformer, simmilar to the AstTransformer from the ast
     module.
     """
-    def __init__(self, optimize=True):
+    def __init__(self, *, optimize=True):
         self._instrs = None
         self._const_indices = None  # Maps id(obj) -> [index in consts tuple]
         self._const_values = None   # Maps id(obj) -> obj
@@ -211,15 +211,120 @@ class CodeTransformer(object, metaclass=ABCMeta):
             closure,
         )
 
-    def __repr__(self):
-        return '<{cls}: {instrs!r}>'.format(
-            cls=type(self).__name__,
-            instrs=self._instrs,
-        )
-
     def LOAD_CONST(self, const):
         """
         Shortcut for loading a constant value.
         Returns an instruction object.
         """
         return LOAD_CONST(self.const_index(const))
+
+
+class Instruction(object):
+    """
+    An abstraction of an instruction.
+    """
+    def __init__(self, opcode, arg=None):
+        if opcode >= HAVE_ARGUMENT and arg is None:
+            raise TypeError(
+                'Instruction {name} expects an argument'.format(
+                    name=opname[opcode],
+                ),
+            )
+        self.opcode = opcode
+        self.arg = arg
+        self.reljmp = False
+        self.absjmp = False
+        self._stolen_by = None
+
+    def _with_jmp_arg(self, transformer):
+        """
+        If this is a jump opcode, then convert the arg to the instruction
+        to jump to.
+        """
+        opcode = self.opcode
+        if opcode in hasjrel:
+            self.arg = transformer[self.index(transformer) + self.arg - 1]
+            self.reljmp = True
+        elif opcode in hasjabs:
+            self.arg = transformer[self.arg]
+            self.absjmp = True
+        return self
+
+    @property
+    def opname(self):
+        return opname[self.opcode]
+
+    @property
+    def have_arg(self):
+        return self.opcode >= HAVE_ARGUMENT
+
+    def to_bytecode(self, transformer):
+        """
+        Convert an instruction to the bytecode form inside of a transformer.
+        This needs a transformer as context because it must know how to
+        resolve jumps.
+        """
+        bs = bytes((self.opcode,))
+        arg = self.arg
+        if isinstance(arg, Instruction):
+            if self.absjmp:
+                bs += arg.jmp_index(transformer).to_bytes(2, 'little')
+            elif self.reljmp:
+                bs += (
+                    arg.jmp_index(transformer) - self.index(transformer) + 1
+                ).to_bytes(2, 'little')
+            else:
+                raise ValueError('must be relative or absolute jump')
+        elif arg is not None:
+            bs += arg.to_bytes(2, 'little')
+        return bs
+
+    def index(self, transformer):
+        """
+        This instruction's index within a transformer.
+        """
+        return transformer.index(self)
+
+    def jmp_index(self, transformer):
+        """
+        This instruction's jump index within a transformer.
+        This checks to see if it was stolen.
+        """
+        return (self._stolen_by or self).index(transformer)
+
+    def __repr__(self):
+        arg = self.arg
+        return '<{cls}: {opname}({arg})>'.format(
+            cls=type(self).__name__,
+            opname=self.opname,
+            arg=': ' + str(arg) if self.arg is not None else '',
+        )
+
+    def steal(self, instr):
+        """
+        Steal the jump index off of `instr`.
+        This makes anything that would have jumped to `instr` jump to
+        this Instruction instead.
+        """
+        instr._stolen_by = self
+        return self
+
+    @classmethod
+    def from_bytes(cls, bs):
+        it = iter(bs)
+        for b in it:
+            try:
+                opname[b]
+            except KeyError:
+                raise ValueError('Invalid opcode: {0!d}'.format(b))
+
+            arg = None
+            if b >= HAVE_ARGUMENT:
+                arg = int.from_bytes(
+                    next(it).to_bytes(1, 'little') +
+                    next(it).to_bytes(1, 'little'),
+                    'little',
+                )
+
+            yield cls(b, arg)
+>>>>>>> BUG: make sure to call super().__init__ in subclass

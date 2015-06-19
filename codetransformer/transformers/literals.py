@@ -40,7 +40,8 @@ class overloaded_dicts(CodeTransformer):
     >>> f()
     OrderedDict([('a', 1), ('b', 2), ('c', 3)])
     """
-    def __init__(self, astype):
+    def __init__(self, astype, **kwargs):
+        super().__init__(**kwargs)
         self._astype = astype
 
     def visit_BUILD_MAP(self, instr):
