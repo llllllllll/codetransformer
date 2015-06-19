@@ -1,4 +1,6 @@
 from collections import OrderedDict
+from decimal import Decimal
+from textwrap import dedent
 
 from codetransformer import CodeTransformer, ops, Instruction
 
@@ -44,7 +46,21 @@ class ordereddict_literals(CodeTransformer):
         # TOS  = m
 
 
-class OverloadedLiteralTransformer(CodeTransformer):
+def _format_constant_docstring(type_):
+    return dedent(
+        """
+        Transformer that applies a callable to each {type_} constant in the
+        transformed code object
+
+        Parameters
+        ----------
+        f : callable
+            A callable to be applied to {type_} literals.
+        """
+    ).format(type_=type_.__name__)
+
+
+class _ConstantTransformerBase(CodeTransformer):
 
     def __init__(self, f):
         self.f = f
@@ -67,29 +83,17 @@ class OverloadedLiteralTransformer(CodeTransformer):
         )
 
 
-class overloaded_bytes(OverloadedLiteralTransformer):
+def overloaded_constants(type_):
     """
-    Decorator that applies a callable to each bytes literal in the decorated
-    function.
-
-    Parameters
-    ----------
-    f : callable
-        A callable to be applied to each bytes literal in the decorated
-        function.
+    Factory for constant transformers that apply to a particular type.
     """
-    _type = bytes
+    return type(
+        "overloaded_" + type_.__name__,
+        (_ConstantTransformerBase,),
+        {'_type': type_, '__doc__': _format_constant_docstring(type_)},
+    )
 
 
-class overloaded_floats(OverloadedLiteralTransformer):
-    """
-    Decorator that applies a callable to each float literal in the decorated
-    function.
-
-    Parameters
-    ----------
-    f : callable
-        A callable to be applied to each float literal in the decorated
-        function.
-    """
-    _type = float
+overloaded_bytes = overloaded_constants(bytes)
+overloaded_floats = overloaded_constants(float)
+decimal_literals = overloaded_floats(Decimal)
