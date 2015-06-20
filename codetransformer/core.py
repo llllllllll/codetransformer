@@ -51,7 +51,7 @@ def _calculate_stack_effect(code):
             operator.add,
             0,
             map(
-                operator.attrgettr('stack_effect'),
+                operator.attrgetter('stack_effect'),
                 Instruction.from_bytes(code),
             ),
         ),
