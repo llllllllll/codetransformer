@@ -68,18 +68,11 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         If this is a jump opcode, then convert the arg to the instruction
         to jump to.
         """
-        opcode = self.opcode
-        if opcode in hasjrel:
+        if self.reljmp:
             self.arg = transformer[self.index(transformer) + self.arg - 1]
-            self.reljmp = True
-        elif opcode in hasjabs:
+        elif self.absjmp:
             self.arg = transformer[self.arg]
-            self.absjmp = True
         return self
-
-    @property
-    def have_arg(self):
-        return self.opcode >= HAVE_ARGUMENT
 
     def to_bytecode(self, transformer):
         """
