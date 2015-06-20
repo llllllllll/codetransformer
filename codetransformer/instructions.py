@@ -129,19 +129,19 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         it = iter(bs)
         for b in it:
             try:
-                opname[b]
-            except KeyError:
+                instr = cls.from_opcode(b)
+            except TypeError:
                 raise ValueError('Invalid opcode: {0!d}'.format(b))
 
             arg = None
-            if b >= HAVE_ARGUMENT:
+            if instr.have_arg:
                 arg = int.from_bytes(
                     next(it).to_bytes(1, 'little') +
                     next(it).to_bytes(1, 'little'),
                     'little',
                 )
 
-            yield cls(b, arg)
+            yield cls(arg)
 
     @classmethod
     def from_opcode(cls, opcode):
