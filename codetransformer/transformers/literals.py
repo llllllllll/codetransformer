@@ -2,7 +2,7 @@ from collections import OrderedDict
 from decimal import Decimal
 from textwrap import dedent
 
-from codetransformer import CodeTransformer, ops, Instruction
+from codetransformer import CodeTransformer, instructions
 
 
 class ordereddict_literals(CodeTransformer):
@@ -10,10 +10,10 @@ class ordereddict_literals(CodeTransformer):
         yield self.LOAD_CONST(OrderedDict).steal(instr)
         # TOS  = OrderedDict
 
-        yield Instruction(ops.CALL_FUNCTION, 0)
+        yield instructions.CALL_FUNCTION(0)
         # TOS  = m = OrderedDict()
 
-        yield from (Instruction(ops.DUP_TOP),) * instr.arg
+        yield from (instructions.DUP_TOP(),) * instr.arg
         # TOS  = m
         # ...
         # TOS[instr.arg] = m
@@ -24,25 +24,25 @@ class ordereddict_literals(CodeTransformer):
         # TOS2 = m
         # TOS3 = m
 
-        yield Instruction(ops.ROT_THREE).steal(instr)
+        yield instructions.ROT_THREE().steal(instr)
         # TOS  = v
         # TOS1 = m
         # TOS2 = k
         # TOS3 = m
 
-        yield Instruction(ops.ROT_THREE)
+        yield instructions.ROT_THREE()
         # TOS  = m
         # TOS1 = k
         # TOS2 = v
         # TOS3 = m
 
-        yield Instruction(ops.ROT_TWO)
+        yield instructions.ROT_TWO()
         # TOS  = k
         # TOS1 = m
         # TOS2 = v
         # TOS3 = m
 
-        yield Instruction(ops.STORE_SUBSCR)
+        yield instructions.STORE_SUBSCR()
         # TOS  = m
 
 
