@@ -1,8 +1,10 @@
 from abc import ABCMeta
-from ctypes import py_object, pythonapi, c_int
-from dis import Bytecode, opname, opmap, hasjabs, hasjrel, HAVE_ARGUMENT
+from ctypes import py_object, pythonapi
+from dis import Bytecode, opmap, HAVE_ARGUMENT
 import operator
 from types import CodeType, FunctionType
+
+from .instructions import Instruction, LOAD_CONST
 
 # Opcodes with attribute access.
 ops = type(
@@ -27,10 +29,6 @@ _optimize = pythonapi.PyCode_Optimize
 _optimize.argtypes = (py_object,) * 4
 _optimize.restype = py_object
 
-_stack_effect = pythonapi.PyCompile_OpcodeStackEffect
-_stack_effect.argtypes = c_int, c_int
-_stack_effect.restype = c_int
-
 _cell_new = pythonapi.PyCell_New
 _cell_new.argtypes = (py_object,)
 _cell_new.restype = py_object
@@ -52,8 +50,11 @@ def _calculate_stack_effect(code):
         _scanl(
             operator.add,
             0,
-            (_stack_effect(instr.opcode, instr.arg or 0)
-             for instr in Instruction.from_bytes(code))),
+            map(
+                operator.attrgettr('stack_effect'),
+                Instruction.from_bytes(code),
+            ),
+        ),
     )
 
 
@@ -135,7 +136,7 @@ class CodeTransformer(object, metaclass=ABCMeta):
         # must backreference their original jump target before any transforms.
         # Don't refactor this into a single pass.
         self._instrs = tuple(_sparse_args([
-            Instruction(b.opcode, b.arg) for b in Bytecode(co)
+            Instruction.from_opcode(b.opcode)(b.arg) for b in Bytecode(co)
         ]))
         self._instrs = tuple(filter(bool, (
             instr and instr._with_jmp_arg(self) for instr in self._instrs
@@ -221,110 +222,4 @@ class CodeTransformer(object, metaclass=ABCMeta):
         Shortcut for loading a constant value.
         Returns an instruction object.
         """
-        return Instruction(ops.LOAD_CONST, self.const_index(const))
-
-
-class Instruction(object):
-    """
-    An abstraction of an instruction.
-    """
-    def __init__(self, opcode, arg=None):
-        if opcode >= HAVE_ARGUMENT and arg is None:
-            raise TypeError(
-                'Instruction {name} expects an argument'.format(
-                    name=opname[opcode],
-                ),
-            )
-        self.opcode = opcode
-        self.arg = arg
-        self.reljmp = False
-        self.absjmp = False
-        self._stolen_by = None
-
-    def _with_jmp_arg(self, transformer):
-        """
-        If this is a jump opcode, then convert the arg to the instruction
-        to jump to.
-        """
-        opcode = self.opcode
-        if opcode in hasjrel:
-            self.arg = transformer[self.index(transformer) + self.arg - 1]
-            self.reljmp = True
-        elif opcode in hasjabs:
-            self.arg = transformer[self.arg]
-            self.absjmp = True
-        return self
-
-    @property
-    def opname(self):
-        return opname[self.opcode]
-
-    def to_bytecode(self, transformer):
-        """
-        Convert an instruction to the bytecode form inside of a transformer.
-        This needs a transformer as context because it must know how to
-        resolve jumps.
-        """
-        bs = bytes((self.opcode,))
-        arg = self.arg
-        if isinstance(arg, Instruction):
-            if self.absjmp:
-                bs += arg.jmp_index(transformer).to_bytes(2, 'little')
-            elif self.reljmp:
-                bs += (
-                    arg.jmp_index(transformer) - self.index(transformer) + 1
-                ).to_bytes(2, 'little')
-            else:
-                raise ValueError('must be relative or absolute jump')
-        elif arg is not None:
-            bs += arg.to_bytes(2, 'little')
-        return bs
-
-    def index(self, transformer):
-        """
-        This instruction's index within a transformer.
-        """
-        return transformer.index(self)
-
-    def jmp_index(self, transformer):
-        """
-        This instruction's jump index within a transformer.
-        This checks to see if it was stolen.
-        """
-        return (self._stolen_by or self).index(transformer)
-
-    def __repr__(self):
-        arg = self.arg
-        return '<{cls}: {opname}({arg})>'.format(
-            cls=type(self).__name__,
-            opname=self.opname,
-            arg=': ' + str(arg) if self.arg is not None else '',
-        )
-
-    def steal(self, instr):
-        """
-        Steal the jump index off of `instr`.
-        This makes anything that would have jumped to `instr` jump to
-        this Instruction instead.
-        """
-        instr._stolen_by = self
-        return self
-
-    @classmethod
-    def from_bytes(cls, bs):
-        it = iter(bs)
-        for b in it:
-            try:
-                opname[b]
-            except KeyError:
-                raise ValueError('Invalid opcode: {0!d}'.format(b))
-
-            arg = None
-            if b >= HAVE_ARGUMENT:
-                arg = int.from_bytes(
-                    next(it).to_bytes(1, 'little') +
-                    next(it).to_bytes(1, 'little'),
-                    'little',
-                )
-
-            yield cls(b, arg)
+        return LOAD_CONST(self.const_index(const))
