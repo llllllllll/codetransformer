@@ -64,7 +64,8 @@ class CodeTransformer(object, metaclass=ABCMeta):
     """
     def __init__(self, optimize=True):
         self._instrs = None
-        self._consts = None
+        self._const_indices = None  # Maps id(obj) -> [index in consts tuple]
+        self._const_values = None   # Maps id(obj) -> obj
         self._optimize = optimize
 
     def __getitem__(self, idx):
@@ -81,14 +82,16 @@ class CodeTransformer(object, metaclass=ABCMeta):
 
     def const_index(self, obj):
         """
-        The index of a constant.
+        The index of a constant in our code object's co_consts.
         If `obj` is not already a constant, it will be added to the consts
         and given a new const index.
         """
+        obj_id = id(obj)
         try:
-            return self._consts[obj][0]
+            return self._const_indices[obj_id][0]
         except KeyError:
-            self._consts[obj] = ret = [self._const_idx]
+            self._const_indices[obj_id] = ret = [self._const_idx]
+            self._const_values[obj_id]
             self._const_idx += 1
             return ret[0]
 
@@ -138,9 +141,11 @@ class CodeTransformer(object, metaclass=ABCMeta):
             instr and instr._with_jmp_arg(self) for instr in self._instrs
         )))
 
-        self._consts = consts = {}
+        self._const_indices = const_indices = {}
+        self._const_values = const_values = {}
         for n, const in enumerate(self.visit_consts(co.co_consts)):
-            consts.setdefault(const, []).append(n)
+            const_indices.setdefault(id(const), []).append(n)
+            const_values[id(const)] = const
 
         self._const_idx = len(co.co_consts)  # used for adding new consts.
         self._clean_co = co
@@ -156,9 +161,9 @@ class CodeTransformer(object, metaclass=ABCMeta):
         )
 
         consts = [None] * self._const_idx
-        for const, idxs in self._consts.items():
+        for const_id, idxs in self._const_indices.items():
             for idx in idxs:
-                consts[idx] = const
+                consts[idx] = const_values[const_id]
 
         names = tuple(self.visit_names(co.co_names))
 
