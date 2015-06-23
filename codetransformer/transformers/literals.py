@@ -54,7 +54,7 @@ def _format_constant_docstring(type_):
 
         Parameters
         ----------
-        f : callable
+        astype : callable
             A callable to be applied to {type_} literals.
         """
     ).format(type_=type_.__name__)
@@ -62,9 +62,9 @@ def _format_constant_docstring(type_):
 
 class _ConstantTransformerBase(CodeTransformer):
 
-    def __init__(self, f):
+    def __init__(self, f, *, optimize=True):
         self.f = f
-        super().__init__()
+        super().__init__(optimize=optimize)
 
     def visit_consts(self, consts):
         return super().visit_consts(
@@ -87,8 +87,12 @@ def overloaded_constants(type_):
     """
     Factory for constant transformers that apply to a particular type.
     """
+    typename = type.__name__
+    if not typename.endswith('s'):
+        typename += 's'
+
     return type(
-        "overloaded_" + type_.__name__,
+        "overloaded_" + typename,
         (_ConstantTransformerBase,),
         {'_type': type_, '__doc__': _format_constant_docstring(type_)},
     )
