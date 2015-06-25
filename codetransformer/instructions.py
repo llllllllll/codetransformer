@@ -21,12 +21,18 @@ class InstructionMeta(ABCMeta):
         return super().__init__(*args)
 
     def __new__(mcls, name, bases, dict_, *, opcode=None):
+        try:
+            return mcls._type_cache[opcode]
+        except KeyError:
+            pass
+
         if len(bases) != 1:
             raise TypeError(
-                '{} does not support multiple inheritence'.format(
+                '{} does not support multiple inheritance'.format(
                     mcls.__name__,
                 ),
             )
+
         if bases[0] is mcls._marker:
             return super().__new__(mcls, name, (object,), dict_)
 
@@ -128,26 +134,22 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
     def from_bytes(cls, bs):
         it = iter(bs)
         for b in it:
-            try:
-                instr = cls.from_opcode(b)
-            except TypeError:
-                raise ValueError('Invalid opcode: {0!d}'.format(b))
-
             arg = None
-            if instr.have_arg:
+            if b >= HAVE_ARGUMENT:
                 arg = int.from_bytes(
                     next(it).to_bytes(1, 'little') +
                     next(it).to_bytes(1, 'little'),
                     'little',
                 )
 
-            yield instr(arg)
+            try:
+                yield cls.from_opcode(b, arg)
+            except TypeError:
+                raise ValueError('Invalid opcode: {}'.format(b))
 
     @classmethod
-    def from_opcode(cls, opcode):
-        return InstructionMeta(
-            opname[opcode], (Instruction,), {}, opcode=opcode
-        )
+    def from_opcode(cls, opcode, arg):
+        return type(cls)(opname[opcode], (cls,), {}, opcode=opcode)(arg)
 
     @property
     def stack_effect(self):
@@ -156,8 +158,23 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         )
 
 
+@classmethod
+def from_argcounts(cls, positional=0, keyword=0):
+    return cls(
+        int.from_bytes(
+            positional.to_bytes(1, 'little') + keyword.to_bytes(1, 'little'),
+            'little',
+        ),
+    )
+
+
 globals_ = globals()
 for name, opcode in opmap.items():
-    globals_[name] = Instruction.from_opcode(opcode)
+    ns = {}
+    if name.startswith('CALL_FUNCTION'):
+        ns['from_argcounts'] = from_argcounts
+    globals_[name] = InstructionMeta(
+        opname[opcode], (Instruction,), ns, opcode=opcode,
+    )
 del name
 del globals_
