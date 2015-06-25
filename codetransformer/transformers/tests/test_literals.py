@@ -1,11 +1,12 @@
 """
 Tests for literal transformers
 """
-from .literals import (
+from decimal import Decimal
+
+from ..literals import (
     overloaded_bytes,
     overloaded_floats,
 )
-from decimal import Decimal
 
 
 def test_overloaded_bytes():
