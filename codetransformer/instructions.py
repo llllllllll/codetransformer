@@ -141,7 +141,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
                     'little',
                 )
 
-            yield cls(arg)
+            yield instr(arg)
 
     @classmethod
     def from_opcode(cls, opcode):
