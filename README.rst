@@ -1,4 +1,4 @@
-``codetransformer 0.4``
+``codetransformer 0.5``
 =========================
 
 Bytecode transformers for CPython inspired by the ``ast`` module's
@@ -24,14 +24,14 @@ For example (taken from my lazy_ library):
         This makes `not` lazy.
         """
         yield self.LOAD_CONST(_lazy_not).steal(instr)
-        # TOS = _lazy_not
+        # TOS  = _lazy_not
         # TOS1 = arg
 
-        yield Instruction(ops.ROT_TWO)
-        # TOS = arg
+        yield ROT_TWO()
+        # TOS  = arg
         # TOS1 = _lazy_not
 
-        yield Instruction(ops.CALL_FUNCTION, 1)
+        yield CALL_FUNCTION(1)
         # TOS = _lazy_not(arg)
 
 This visitor is applied to a unary not instruction (``not a``) and replaces it
@@ -198,6 +198,40 @@ The ``optimize`` transformer takes a keyword argument: ``passes``, that denotes
 the number of passes of the peephole optimizer to run. Just like this
 optimization is ironed out on the second pass, there may exist some that
 require 2 or 3 passes to work.
+
+Overloaded Literals
+^^^^^^^^^^^^^^^^^^^
+
+The ``codetransfomer.transformers.literals`` module includes transformers
+designed to allow for overloading the meaning of certain literal values. This
+allows us to front load some work to compile time and make some operations for
+readable. One example is ``ordereddict_literals``. This transformer instance
+changes all dictionary literals into ``collection.OrderedDict`` instances. For
+example:
+
+.. code-block:: python
+
+    >>> from codetransfomer.transformers.literals import ordereddict_literals
+    >>> @ordereddict_literals
+    ... def f():
+    ...     return {'a': 1, 'b': 2, 'c': 3}
+    ...
+    >>> f()
+    OrderedDict([('a', 1), ('b', 2), ('c', 3)])
+
+
+Another example is the ``decimal`` transformer. This transformer turns float
+literals into ``Decimal`` literals. For example:
+
+.. code-block:: python
+
+   >>> from codetransfomer.transformers.literals import decimal_literals
+   >>> @decimal_literals
+   ... def f():
+   ...     return 1.5
+   ...
+   >>> f()
+   Decimal('1.5')
 
 
 .. _lazy: https://github.com/llllllllll/lazy_python
