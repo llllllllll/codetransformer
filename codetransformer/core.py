@@ -92,7 +92,7 @@ class CodeTransformer(object, metaclass=ABCMeta):
             return self._const_indices[obj_id][0]
         except KeyError:
             self._const_indices[obj_id] = ret = [self._const_idx]
-            self._const_values[obj_id]
+            self._const_values[obj_id] = obj
             self._const_idx += 1
             return ret[0]
 
