@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from decimal import Decimal
+from itertools import islice
 from textwrap import dedent
 
 from codetransformer import CodeTransformer, instructions
@@ -125,8 +126,18 @@ class _ConstantTransformerBase(CodeTransformer):
 
 
 def overloaded_constants(type_):
-    """
-    Factory for constant transformers that apply to a particular type.
+    """Factory for constant transformers that apply to a particular type.
+
+    Parameters
+    ----------
+    type_ : type
+        The type to overload.
+
+    Returns
+    -------
+    transformer : subclass of CodeTransformer
+        A new code transformer class that will overload the provided
+        literal types.
     """
     typename = type.__name__
     if not typename.endswith('s'):
@@ -139,6 +150,132 @@ def overloaded_constants(type_):
     )
 
 
+overloaded_strs = overloaded_constants(str)
+haskell_strs = overloaded_strs(tuple)
 overloaded_bytes = overloaded_constants(bytes)
+bytearray_literals = overloaded_bytes(bytearray)
 overloaded_floats = overloaded_constants(float)
 decimal_literals = overloaded_floats(Decimal)
+
+
+# Added as a method for overloaded_build
+def _visit_build(self, instr):
+    yield instr
+    # TOS  = new_list
+
+    yield self.LOAD_CONST(self.f)
+    # TOS  = astype
+    # TOS1 = new_list
+
+    yield instructions.ROT_TWO()
+    # TOS  = new_list
+    # TOS1 = astype
+
+    yield instructions.CALL_FUNCTION(1)
+    # TOS  = astype(new_list)
+
+
+def overloaded_build(instruction, type_):
+    """Factory for constant transformers that apply to a given
+    build instruction.
+
+    Parameters
+    ----------
+    instruction : subclass of Instruction
+        The type of instruction to overload.
+    type_ : type
+        The type of the object created by the build instruction.
+
+    Returns
+    -------
+    transformer : subclass of CodeTransformer
+        A new code transformer class that will overload the provided
+        literal types.
+    """
+    opname = instruction.opname
+    if not opname.startswith('BUILD_'):
+        raise TypeError('overload_build only works with BUILD_* instructions')
+
+    typename = type_.__name__
+    if not typename.endswith('s'):
+        typename = typename + 's'
+    return type(
+        'overloaded_' + typename,
+        (overloaded_constants(type_),),
+        {'visit_' + opname: _visit_build},
+    )
+
+overloaded_slices = overloaded_build(instructions.BUILD_SLICE, slice)
+overloaded_lists = overloaded_build(instructions.BUILD_LIST, list)
+overloaded_sets = overloaded_build(instructions.BUILD_SET, set)
+
+
+# Add a special method for set overloader.
+def visit_consts(self, consts):
+    consts = super(overloaded_sets, self).visit_consts(consts)
+    return tuple(
+        # Always pass a thawed set so mutations can happen inplace.
+        self.f(set(const)) if isinstance(const, frozenset) else const
+        for const in consts
+    )
+
+overloaded_sets.visit_consts = visit_consts
+del visit_consts
+frozenset_literals = overloaded_sets(frozenset)
+
+
+overloaded_tuples = overloaded_build(instructions.BUILD_TUPLE, tuple)
+
+
+# Add a special method for the tuple overloader.
+def visit_consts(self, consts):
+    consts = super(overloaded_tuples, self).visit_consts(consts)
+    return tuple(
+        self.f(const) if isinstance(const, tuple) else const
+        for const in consts
+    )
+
+overloaded_tuples.visit_consts = visit_consts
+del visit_consts
+
+
+def singleton(cls):
+    return cls()
+
+
+@singleton
+class islice_literals(CodeTransformer):
+    """Transformer that turns slice indexing into an islice object.
+
+    Examples
+    --------
+    >>> from codetransformer.transformers.literals import islice_literals
+    >>> @islice_literals
+    ... def f():
+    ...     return map(str, (1, 2, 3, 4))[:2]
+    ...
+    >>> f()
+    <itertools.islice at ...>
+    >>> tuple(f())
+    ('1', '2')
+    """
+    def visit_BINARY_SUBSCR(self, instr):
+        yield self.LOAD_CONST(self._islicer).steal(instr)
+        # TOS  = self._islicer
+        # TOS1 = k
+        # TOS2 = m
+
+        yield instructions.ROT_THREE()
+        # TOS  = k
+        # TOS1 = m
+        # TOS2 = self._islicer
+
+        yield instructions.CALL_FUNCTION(2)
+        # TOS  = self._islicer(m, k)
+
+    @staticmethod
+    def _islicer(m, k):
+        if isinstance(k, slice):
+            return islice(m, k.start, k.stop, k.step)
+
+        return m[k]
