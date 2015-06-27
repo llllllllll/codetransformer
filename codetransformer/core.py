@@ -1,5 +1,6 @@
 from abc import ABCMeta
-from copy import copy
+from collections import ChainMap
+from contextlib import contextmanager
 from ctypes import py_object, pythonapi
 from dis import Bytecode, opmap, HAVE_ARGUMENT
 import operator
@@ -59,16 +60,80 @@ def _calculate_stack_effect(code):
     )
 
 
-class CodeTransformer(object, metaclass=ABCMeta):
+class context_free(object):
+    """Mark that a method or attribute should not be looked up in the
+    code context.
+
+    Parameters
+    ----------
+    a : any
+        The object to put into the dict.
+    """
+    def __init__(self, a):
+        self._a = a
+
+    def __call__(self):
+        return self._a
+
+
+class CodeTransformerMeta(ABCMeta):
+    _context_free_types = context_free, FunctionType, staticmethod, classmethod
+
+    def __new__(mcls, name, bases, dict_):
+        _context_free = (
+            set() | getattr(bases and bases[0], '_context_free', set())
+        )
+        for k, v in dict_.items():
+            if not isinstance(v, mcls._context_free_types):
+                continue
+            if isinstance(v, context_free):
+                dict_[k] = v()
+            _context_free.add(k)
+
+        dict_['_context_free'] = _context_free
+        return super().__new__(mcls, name, bases, dict_)
+
+
+getattribute = object.__getattribute__
+setattribute = object.__setattr__
+
+
+class CodeTransformer(object, metaclass=CodeTransformerMeta):
     """
     A code object transformer, simmilar to the AstTransformer from the ast
     module.
     """
+    _contexts = context_free(ChainMap())
+
     def __init__(self, *, optimize=True):
         self._instrs = None
         self._const_indices = None  # Maps id(obj) -> [index in consts tuple]
         self._const_values = None   # Maps id(obj) -> obj
         self._optimize = optimize
+
+    def __getattribute__(self, name):
+        if name in type(self)._context_free:
+            return getattribute(self, name)
+
+        try:
+            return self._contexts[name]
+        except KeyError:
+            raise AttributeError(name)
+
+    def __setattr__(self, name, value):
+        if name in type(self)._context_free:
+            setattribute(self, name, value)
+
+        self._contexts[name] = value
+
+    @contextmanager
+    def _context(self):
+        old_contexts = getattribute(self, '_contexts')
+        setattribute(self, '_contexts', old_contexts.new_child())
+        try:
+            yield
+        finally:
+            setattribute(self, '_contexts', old_contexts)
 
     def __getitem__(self, idx):
         return self._instrs[idx]
@@ -109,10 +174,7 @@ class CodeTransformer(object, metaclass=ABCMeta):
         Override this method to transform the `co_consts` of the code object.
         """
         return tuple(
-            # We need to copy here so that the inner transformer
-            # has a clean state to work with and does not trample
-            # our constants and code.
-            copy(self).visit(const) if isinstance(const, CodeType) else const
+            self.visit(const) if isinstance(const, CodeType) else const
             for const in consts
         )
 
@@ -135,6 +197,10 @@ class CodeTransformer(object, metaclass=ABCMeta):
         """
         Visit a code object, applying the transforms.
         """
+        with self._context():
+            return self._visit(co, name=name)
+
+    def _visit(self, co, *, name=None):
         # WARNING:
         # This is setup in this double assignment way because jump args
         # must backreference their original jump target before any transforms.

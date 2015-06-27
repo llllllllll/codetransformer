@@ -3,7 +3,7 @@ from decimal import Decimal
 from itertools import islice
 from textwrap import dedent
 
-from codetransformer import CodeTransformer, instructions
+from codetransformer import CodeTransformer, instructions, context_free
 
 
 class overloaded_dicts(CodeTransformer):
@@ -109,9 +109,9 @@ class _ConstantTransformerBase(CodeTransformer):
         super().__init__(optimize=optimize)
 
     def visit_consts(self, consts):
+        # This is all one expression.
         return super().visit_consts(
             tuple(
-                # This is all one expression.
                 frozenset(self.visit_consts(tuple(const)))
                 if isinstance(const, frozenset)
                 else self.visit_consts(const)
@@ -119,7 +119,6 @@ class _ConstantTransformerBase(CodeTransformer):
                 else self.f(const)
                 if isinstance(const, self._type)
                 else const
-                ###
                 for const in consts
             )
         )
@@ -145,8 +144,10 @@ def overloaded_constants(type_):
 
     return type(
         "overloaded_" + typename,
-        (_ConstantTransformerBase,),
-        {'_type': type_, '__doc__': _format_constant_docstring(type_)},
+        (_ConstantTransformerBase,), {
+            '_type': context_free(type_),
+            '__doc__': _format_constant_docstring(type_),
+        },
     )
 
 
