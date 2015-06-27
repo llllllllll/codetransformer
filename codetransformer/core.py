@@ -1,4 +1,5 @@
 from abc import ABCMeta
+from copy import copy
 from ctypes import py_object, pythonapi
 from dis import Bytecode, opmap, HAVE_ARGUMENT
 import operator
@@ -108,7 +109,10 @@ class CodeTransformer(object, metaclass=ABCMeta):
         Override this method to transform the `co_consts` of the code object.
         """
         return tuple(
-            type(self).visit(const) if isinstance(const, CodeType) else const
+            # We need to copy here so that the inner transformer
+            # has a clean state to work with and does not trample
+            # our constants and code.
+            copy(self).visit(const) if isinstance(const, CodeType) else const
             for const in consts
         )
 
