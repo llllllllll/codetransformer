@@ -68,8 +68,8 @@ def test_normal_exc_match():
 
 def test_exc_match_custom_func():
 
-    def match_greater(expr, exc_info):
-        return expr > exc_info[1].args[0]
+    def match_greater(expr, exc_type, exc_value, exc_traceback):
+        return expr > exc_value.args[0]
 
     @pattern_matched_exceptions(match_greater)
     def foo():

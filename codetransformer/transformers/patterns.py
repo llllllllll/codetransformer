@@ -12,9 +12,10 @@ from enum import (
 
 from codetransformer.core import CodeTransformer
 from codetransformer.instructions import (
-    ROT_TWO,
-    POP_TOP,
     CALL_FUNCTION,
+    CALL_FUNCTION_VAR,
+    POP_TOP,
+    ROT_TWO,
 )
 
 
@@ -33,22 +34,22 @@ class Comparisons(IntEnum):
     EXCEPTION_MATCH = 10
 
 
-def match(match_expr, exc_info):
+def match(match_expr, exc_type, exc_value, exc_traceback):
     """
     Called to determine whether or not an except block should be matched.
 
     True -> enter except block
     False -> don't enter except block
     """
-    type_, value, tb = exc_info
-
     # Emulate standard behavior when match_expr is an exception subclass.
     if isinstance(match_expr, type) and issubclass(match_expr, BaseException):
-        return issubclass(type_, match_expr)
+        return issubclass(exc_type, match_expr)
 
     # Match on type and args when match_expr is an exception instance.
     return (
-        issubclass(type_, type(match_expr)) and match_expr.args == value.args
+        issubclass(exc_type, type(match_expr))
+        and
+        match_expr.args == exc_value.args
     )
 
 
@@ -97,6 +98,6 @@ class pattern_matched_exceptions(CodeTransformer):
             yield ROT_TWO()
             yield self.LOAD_CONST(exc_info)
             yield CALL_FUNCTION(0)
-            yield CALL_FUNCTION(2)
+            yield CALL_FUNCTION_VAR(1)
         else:
             yield instr
