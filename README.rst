@@ -152,6 +152,47 @@ overridden. These will still be faster than doing a global lookup to find the
 object. If no arguments are passed, it means: assume all the builtin names are
 constants.
 
+``pattern_matched_exceptions``
+^^^^^^^^^^^^
+
+Allows usage of arbitrary expressions in except-blocks:
+
+.. code-block:: python
+
+    >>> @pattern_matched_exceptions()
+    ... def foo():
+    ...     try:
+    ...         raise ValueError('bar')
+    ...     except ValueError('buzz'):
+    ...         return 'buzz'
+    ...     except ValueError('bar'):
+    ...         return 'bar'
+    >>> foo()
+    'bar'
+
+By default, an except-pattern is matched if it has the same args and type as
+those of the raised exception.  It's also possible to pass a custom matching
+function to modify this behavior:
+
+.. code-block:: python
+
+    >>> def match_greater(expr, exc_info):
+    ...     return expr > exc_info[1].args[0]
+
+    >>> @pattern_matched_exceptions(match_greater)
+    ... def foo():
+    ...     try:
+    ...         raise ValueError(5)
+    ...     except 4:
+    ...         return 4
+    ...     except 5:
+    ...         return 5
+    ...     except 6:
+    ...         return 6
+    >>> foo()
+    6
+
+
 ``optimize``
 ^^^^^^^^^^^^
 
