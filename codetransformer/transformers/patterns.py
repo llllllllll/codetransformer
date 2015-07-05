@@ -59,7 +59,7 @@ class pattern_matched_exceptions(CodeTransformer):
 
     When an exception is raised in an except block in a function decorated with
     `pattern_matched_exceptions`, a matching function will be called with the
-    block's expression and the current value of sys.exc_info().  If the
+    block's expression and the three values returned by sys.exc_info().  If the
     matching function returns `True`, we enter the corresponding except-block,
     otherwise we continue to the next block, or re-raise if there are no more
     blocks to check
@@ -67,8 +67,8 @@ class pattern_matched_exceptions(CodeTransformer):
     Parameters
     ----------
     matcher : function, optional, default is `transformers.exc_patterns.match`.
-        A function accepting an expression and an exc_info tuple, returning
-        True if the exception tuple matches the expression.
+        A function accepting an expression and the values of sys.exc_info, returning
+        True if the exception info "matches" the expression.
 
         The default behavior is to emulate standard python when the match
         expression is a *subtype* of Exception, and to compare exc.type and
