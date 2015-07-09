@@ -108,7 +108,7 @@ class CodeTransformer(object, metaclass=CodeTransformerMeta):
     def __init__(self, *, optimize=True):
         self._instrs = None
         self._const_indices = None  # Maps id(obj) -> [index in consts tuple]
-        self._const_values = None   # Maps id(obj) -> obj
+        self._consts = None
         self._optimize = optimize
 
     def __getattribute__(self, name):
@@ -158,7 +158,7 @@ class CodeTransformer(object, metaclass=CodeTransformerMeta):
             return self._const_indices[obj_id][0]
         except KeyError:
             self._const_indices[obj_id] = ret = [self._const_idx]
-            self._const_values[obj_id] = obj
+            self._consts.append(obj)
             self._const_idx += 1
             return ret[0]
 
@@ -213,12 +213,12 @@ class CodeTransformer(object, metaclass=CodeTransformerMeta):
         )))
 
         self._const_indices = const_indices = {}
-        self._const_values = const_values = {}
+        self._consts = consts = []
         for n, const in enumerate(self.visit_consts(co.co_consts)):
             const_indices.setdefault(id(const), []).append(n)
-            const_values[id(const)] = const
+            consts.append(const)
 
-        self._const_idx = len(co.co_consts)  # used for adding new consts.
+        self._const_idx = len(self._consts)  # used for adding new consts.
         self._clean_co = co
 
         # Apply the transforms.
@@ -230,12 +230,6 @@ class CodeTransformer(object, metaclass=CodeTransformerMeta):
         code = b''.join(
             (instr or b'') and instr.to_bytecode(self) for instr in self
         )
-
-        consts = [None] * self._const_idx
-        for const_id, idxs in self._const_indices.items():
-            for idx in idxs:
-                consts[idx] = const_values[const_id]
-
         names = tuple(self.visit_names(co.co_names))
 
         if self._optimize:
@@ -287,3 +281,11 @@ class CodeTransformer(object, metaclass=CodeTransformerMeta):
         Returns an instruction object.
         """
         return LOAD_CONST(self.const_index(const))
+
+    def const_value(self, instr):
+        """
+        Helper for getting the value to be loaded by a LOAD_CONST.
+        """
+        if not isinstance(instr, LOAD_CONST):
+            raise TypeError("Expected LOAD_CONST, got %s" % type(instr))
+        return self._consts[instr.arg]
