@@ -1,168 +1,48 @@
-from abc import ABCMeta
-from collections import ChainMap
 from contextlib import contextmanager
 from ctypes import py_object, pythonapi
-from dis import Bytecode, opmap, HAVE_ARGUMENT
-import operator
 from types import CodeType, FunctionType
 
-from .instructions import Instruction, LOAD_CONST
+from .code import Code
+from .instructions import LOAD_CONST
 
-# Opcodes with attribute access.
-ops = type(
-    'Ops', (dict,), {'__getattr__': lambda self, name: self[name]},
-)(opmap)
-
-
-def _sparse_args(instrs):
-    """
-    Makes the arguments sparse so that instructions live at the correct
-    index for the jump resolution step.
-    The `None` instructions will be filtered out.
-    """
-    for instr in instrs:
-        yield instr
-        if instr.opcode >= HAVE_ARGUMENT:
-            yield None
-            yield None
-
-
-_optimize = pythonapi.PyCode_Optimize
-_optimize.argtypes = (py_object,) * 4
-_optimize.restype = py_object
 
 _cell_new = pythonapi.PyCell_New
 _cell_new.argtypes = (py_object,)
 _cell_new.restype = py_object
 
 
-def _scanl(f, n, ns):
-    yield n
-    for m in ns:
-        n = f(n, m)
-        yield n
-
-
 def _a_if_not_none(a, b):
     return a if a is not None else b
 
 
-def _calculate_stack_effect(code):
-    return max(
-        _scanl(
-            operator.add,
-            0,
-            map(
-                operator.attrgetter('stack_effect'),
-                Instruction.from_bytes(code),
-            ),
-        ),
-    )
+class NoCodeContext(Exception):
+    def __init__(self):
+        return super().__init__(self, 'no running code context')
 
 
-class context_free(object):
-    """Mark that a method or attribute should not be looked up in the
-    code context.
-
-    Parameters
-    ----------
-    a : any
-        The object to put into the dict.
+class CodeTransformer(object):
+    """A code object transformer, simmilar to the NodeTransformer
+    from the ast module.
     """
-    def __init__(self, a):
-        self._a = a
+    __slots__ = '_optimize', '_code_stack'
 
-    def __call__(self):
-        return self._a
-
-
-class CodeTransformerMeta(ABCMeta):
-    _context_free_types = context_free, FunctionType, staticmethod, classmethod
-
-    def __new__(mcls, name, bases, dict_):
-        _context_free = (
-            set() | getattr(bases and bases[0], '_context_free', set())
-        )
-        for k, v in dict_.items():
-            if not isinstance(v, mcls._context_free_types):
-                continue
-            if isinstance(v, context_free):
-                dict_[k] = v()
-            _context_free.add(k)
-
-        dict_['_context_free'] = _context_free
-        return super().__new__(mcls, name, bases, dict_)
-
-
-getattribute = object.__getattribute__
-setattribute = object.__setattr__
-
-
-class CodeTransformer(object, metaclass=CodeTransformerMeta):
-    """
-    A code object transformer, simmilar to the AstTransformer from the ast
-    module.
-    """
-    _contexts = context_free(ChainMap())
-
-    def __init__(self, *, optimize=True):
-        self._instrs = None
-        self._const_indices = None  # Maps id(obj) -> [index in consts tuple]
-        self._consts = None
-        self._optimize = optimize
-
-    def __getattribute__(self, name):
-        if name in type(self)._context_free:
-            return getattribute(self, name)
-
-        try:
-            return self._contexts[name]
-        except KeyError:
-            raise AttributeError(name)
-
-    def __setattr__(self, name, value):
-        if name in type(self)._context_free:
-            setattribute(self, name, value)
-
-        self._contexts[name] = value
-
-    @contextmanager
-    def _context(self):
-        old_contexts = getattribute(self, '_contexts')
-        setattribute(self, '_contexts', old_contexts.new_child())
-        try:
-            yield
-        finally:
-            setattribute(self, '_contexts', old_contexts)
-
-    def __getitem__(self, idx):
-        return self._instrs[idx]
-
-    def index(self, instr):
-        """
-        Returns the index of an `Instruction`.
-        """
-        return self._instrs.index(instr)
-
-    def __iter__(self):
-        return iter(self._instrs)
-
-    def const_index(self, obj):
-        """
-        The index of a constant in our code object's co_consts.
-        If `obj` is not already a constant, it will be added to the consts
-        and given a new const index.
-        """
-        obj_id = id(obj)
-        try:
-            return self._const_indices[obj_id][0]
-        except KeyError:
-            self._const_indices[obj_id] = ret = [self._const_idx]
-            self._consts.append(obj)
-            self._const_idx += 1
-            return ret[0]
+    def __init__(self):
+        self._code_stack = []
 
     def visit_generic(self, instr):
+        """Generic visitor, calls the correct visit function for the given
+        instruction.
+
+        Parameters
+        ----------
+        instr : Instruction
+            The instruction to visit.
+
+        Yields
+        ------
+        new_instr : Instruction
+            The new instructions to replace this one with.
+        """
         if instr is None:
             yield None
             return
@@ -170,8 +50,19 @@ class CodeTransformer(object, metaclass=CodeTransformerMeta):
         yield from getattr(self, 'visit_' + instr.opname, lambda *a: a)(instr)
 
     def visit_consts(self, consts):
-        """
+        """visitor for the co_consts field.
+
         Override this method to transform the `co_consts` of the code object.
+
+        Parameters
+        ----------
+        consts : tuple
+            The co_consts
+
+        Returns
+        -------
+        new_consts : tuple
+            The new constants.
         """
         return tuple(
             self.visit(const) if isinstance(const, CodeType) else const
@@ -179,8 +70,17 @@ class CodeTransformer(object, metaclass=CodeTransformerMeta):
         )
 
     def _id(self, obj):
-        """
-        Identity function.
+        """Identity function.
+
+        Parameters
+        ----------
+        obj : any
+            The object to return
+
+        Returns
+        -------
+        obj : any
+            The input unchanged
         """
         return obj
 
@@ -193,71 +93,57 @@ class CodeTransformer(object, metaclass=CodeTransformerMeta):
 
     del _id
 
-    def visit(self, co, *, name=None):
+    def visit(self, co, *, name=None, filename=None, lnotab=None):
+        """Visit a python code object, applying the transforms.
+
+        Parameters
+        ----------
+        co : CodeType
+            The python code object to visit.
+        name : str, optional
+            The new name for this code object.
+        filename : str, optional
+            The new filename for this code object.
+        lnotab : bytes, optional
+            The new lnotab for this code object.
+
+        Returns
+        -------
+        new_co : CodeType
+            The visited code object.
         """
-        Visit a code object, applying the transforms.
-        """
-        with self._context():
-            return self._visit(co, name=name)
+        code = Code.from_pycode(co)
+        # reverse lookups from for constants and names.
+        reversed_consts = {}
+        reversed_names = {}
+        for instr in code:
+            if isinstance(instr, LOAD_CONST):
+                reversed_consts[instr] = instr.arg
+            if instr.uses_name:
+                reversed_names[instr] = instr.arg
 
-    def _visit(self, co, *, name=None):
-        # WARNING:
-        # This is setup in this double assignment way because jump args
-        # must backreference their original jump target before any transforms.
-        # Don't refactor this into a single pass.
-        self._instrs = tuple(_sparse_args([
-            Instruction.from_opcode(b.opcode, b.arg) for b in Bytecode(co)
-        ]))
-        self._instrs = tuple(filter(bool, (
-            instr and instr._with_jmp_arg(self) for instr in self._instrs
-        )))
+        instrs, consts = tuple(zip(*reversed_consts.items())) or ((), ())
+        for instr, const in zip(instrs, self.visit_consts(consts)):
+            instr.arg = const
 
-        self._const_indices = const_indices = {}
-        self._consts = consts = []
-        for n, const in enumerate(self.visit_consts(co.co_consts)):
-            const_indices.setdefault(id(const), []).append(n)
-            consts.append(const)
+        instrs, names = tuple(zip(*reversed_names.items())) or ((), ())
+        for instr, name in zip(instrs, self.visit_names(names)):
+            instr.arg = name
 
-        self._const_idx = len(self._consts)  # used for adding new consts.
-        self._clean_co = co
-
-        # Apply the transforms.
-        self._instrs = tuple(_sparse_args(sum(
-            (tuple(self.visit_generic(_instr)) for _instr in self),
-            (),
-        )))
-
-        code = b''.join(
-            (instr or b'') and instr.to_bytecode(self) for instr in self
-        )
-        names = tuple(self.visit_names(co.co_names))
-
-        if self._optimize:
-            # Run the optimizer over the new code.
-            code = _optimize(
-                code,
-                consts,
-                names,
-                co.co_lnotab,
-            )
-
-        return CodeType(
-            co.co_argcount,
-            co.co_kwonlyargcount,
-            co.co_nlocals,
-            _calculate_stack_effect(code),
-            co.co_flags,
-            code,
-            tuple(consts),
-            names,
-            tuple(self.visit_varnames(co.co_varnames)),
-            co.co_filename,
-            self.visit_name(name if name is not None else co.co_name),
-            co.co_firstlineno,
-            co.co_lnotab,
-            tuple(self.visit_freevars(co.co_freevars)),
-            tuple(self.visit_cellvars(co.co_cellvars)),
-        )
+        with self._new_code_context(code):
+            return Code(
+                sum((tuple(self.visit_generic(instr)) for instr in code), ()),
+                code.argnames,
+                cellvars=self.visit_cellvars(code.cellvars),
+                freevars=self.visit_freevars(code.freevars),
+                name=name if name is not None else code.name,
+                filename=filename if filename is not None else code.filename,
+                lnotab=lnotab if lnotab is not None else code.lnotab,
+                nested=code.nested,
+                generator=code.generator,
+                coroutine=code.coroutine,
+                iterable_coroutine=code.iterable_coroutine,
+            ).as_pycode
 
     def __call__(self, f, *,
                  globals_=None, name=None, defaults=None, closure=None):
@@ -275,17 +161,23 @@ class CodeTransformer(object, metaclass=CodeTransformerMeta):
             closure,
         )
 
-    def LOAD_CONST(self, const):
-        """
-        Shortcut for loading a constant value.
-        Returns an instruction object.
-        """
-        return LOAD_CONST(self.const_index(const))
+    @contextmanager
+    def _new_code_context(self, code):
+        self._code_stack.append(code)
+        try:
+            yield
+        finally:
+            self._code_stack.pop()
+
+    @property
+    def code(self):
+        try:
+            return self._code_stack[-1]
+        except IndexError:
+            raise NoCodeContext()
 
     def const_value(self, instr):
         """
         Helper for getting the value to be loaded by a LOAD_CONST.
         """
-        if not isinstance(instr, LOAD_CONST):
-            raise TypeError("Expected LOAD_CONST, got %s" % type(instr))
-        return self._consts[instr.arg]
+        self.code.const_value(instr)

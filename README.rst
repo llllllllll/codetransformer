@@ -193,53 +193,6 @@ function to modify this behavior:
     6
 
 
-``optimize``
-^^^^^^^^^^^^
-
-The CPython peephole optimizer is only run once over the bytecode; however,
-sometimes some optimizations do not present themselves until a second pass has
-been made. One example of this is De Morgan's Laws. Using the following code as
-an example:
-
-.. code-block:: python
-
-   >>> from dis import dis
-   >>> def f(a, b):
-   ...     if not a and not b: return None
-   ...
-   >>> dis(f)
-   2           0 LOAD_FAST                0 (a)
-               3 UNARY_NOT
-               4 POP_JUMP_IF_FALSE       18
-               7 LOAD_FAST                1 (b)
-              10 UNARY_NOT
-              11 POP_JUMP_IF_FALSE       18
-              14 LOAD_CONST               0 (None)
-              17 RETURN_VALUE
-         >>   18 LOAD_CONST               0 (None)
-              21 RETURN_VALUE
-   >>> from codetransformer.transformers import optimize
-   >>> @optimize()
-   ... def g(a, b):
-   ...     if not a and not b: return None
-   ...
-   >>> dis(g)
-   3           0 LOAD_FAST                0 (a)
-               3 POP_JUMP_IF_TRUE        16
-               6 LOAD_FAST                1 (b)
-               9 POP_JUMP_IF_TRUE        16
-              12 LOAD_CONST               0 (None)
-              15 RETURN_VALUE
-         >>   16 LOAD_CONST               0 (None)
-              19 RETURN_VALUE
-
-
-This shows that we can get a pretty decent win for no effort at all.
-The ``optimize`` transformer takes a keyword argument: ``passes``, that denotes
-the number of passes of the peephole optimizer to run. Just like this
-optimization is ironed out on the second pass, there may exist some that
-require 2 or 3 passes to work.
-
 Overloaded Literals
 ^^^^^^^^^^^^^^^^^^^
 
