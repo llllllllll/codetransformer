@@ -21,7 +21,7 @@ class NoCodeContext(Exception):
     outside of a code context.
     """
     def __init__(self):
-        return super().__init__(self, 'no running code context')
+        return super().__init__('no code context')
 
 
 class CodeTransformer(object):
