@@ -391,6 +391,8 @@ class Code(object):
         Names come from instructions like LOAD_GLOBAL or STORE_ATTR
         where the name of the global or attribute is needed at runtime.
         """
+        # We must sort to preserve the order between calls.
+        # The set comprehension is to drop the duplicates.
         return tuple(sorted({
             instr.arg for instr in self.instrs if instr.uses_name
         }))
@@ -408,6 +410,8 @@ class Code(object):
     def varnames(self):
         """The names of all of the local variables in this code object.
         """
+        # We must sort to preserve the order between calls.
+        # The set comprehension is to drop the duplicates.
         return self._argnames + tuple(sorted({
             instr.arg for instr in self.instrs if instr.uses_varname
         }))
