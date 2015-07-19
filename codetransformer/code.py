@@ -500,8 +500,8 @@ class Code(object):
             map(operator.attrgetter('stack_effect'), self.instrs),
         ))
 
-    def __getitem__(self, idx):
-        return self.instrs[idx]
+    def __getitem__(self, key):
+        return self.instrs[key]
 
     def index(self, instr):
         """Returns the index of instr.
