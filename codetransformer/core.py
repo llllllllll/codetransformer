@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from ctypes import py_object, pythonapi
+from itertools import chain
 from types import CodeType, FunctionType
 
 from .code import Code
@@ -139,18 +140,18 @@ class CodeTransformer(object):
 
         with self._new_code_context(code):
             return Code(
-                sum((tuple(self.visit_generic(instr)) for instr in code), ()),
+                chain.from_iterable(map(self.visit_generic, code)),
                 code.argnames,
                 cellvars=self.visit_cellvars(code.cellvars),
                 freevars=self.visit_freevars(code.freevars),
                 name=name if name is not None else code.name,
                 filename=filename if filename is not None else code.filename,
                 lnotab=lnotab if lnotab is not None else code.lnotab,
-                nested=code.nested,
-                generator=code.generator,
-                coroutine=code.coroutine,
-                iterable_coroutine=code.iterable_coroutine,
-            ).as_pycode
+                nested=code.is_nested,
+                generator=code.is_generator,
+                coroutine=code.is_coroutine,
+                iterable_coroutine=code.is_iterable_coroutine,
+            ).to_pycode()
 
     def __call__(self, f, *,
                  globals_=None, name=None, defaults=None, closure=None):
@@ -178,13 +179,9 @@ class CodeTransformer(object):
 
     @property
     def code(self):
+        """The code object we are currently manipulating.
+        """
         try:
             return self._code_stack[-1]
         except IndexError:
             raise NoCodeContext()
-
-    def const_value(self, instr):
-        """
-        Helper for getting the value to be loaded by a LOAD_CONST.
-        """
-        self.code.const_value(instr)

@@ -277,9 +277,9 @@ class Code(object):
             iterable_coroutine=flags & Flags.CO_ITERABLE_COROUTINE
         )
 
-    @property
-    def as_pycode(self):
-        """Create a python code object from a codetransformer code object.
+    def to_pycode(self):
+        """Create a python code object from the more abstract
+        codetransfomer.Code object.
 
         Returns
         -------
@@ -305,15 +305,18 @@ class Code(object):
                 bc.extend(varnames.index(instr.arg).to_bytes(2, 'little'))
             elif instr.absjmp:
                 # Resolve the absolute jump target.
-                bc.extend(self.sparse_index(instr.arg).to_bytes(2, 'little'))
+                bc.extend(
+                    self.bytecode_offset(instr.arg).to_bytes(2, 'little'),
+                )
             elif instr.reljmp:
                 # Resolve the relative jump target.
                 # We do this by subtracting the curren't instructions's
                 # sparse index from the sparse index of the argument.
                 # We then subtract 3 to account for the 3 bytes the
                 # current instruction takes up.
+                bytecode_offset = self.bytecode_offset
                 bc.extend((
-                    self.sparse_index(instr.arg) - self.sparse_index(instr) - 3
+                    bytecode_offset(instr.arg) - bytecode_offset(instr) - 3
                 ).to_bytes(2, 'little',))
             elif instr.have_arg:
                 # Write any other arg here.
