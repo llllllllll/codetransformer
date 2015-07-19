@@ -1,4 +1,4 @@
-from dis import Bytecode, HAVE_ARGUMENT
+from dis import Bytecode
 from enum import IntEnum, unique
 from functools import reduce
 import operator
@@ -59,7 +59,7 @@ def _sparse_args(instrs):
     """
     for instr in instrs:
         yield instr
-        if instr.opcode >= HAVE_ARGUMENT:
+        if instr.have_arg:
             yield None
             yield None
 
