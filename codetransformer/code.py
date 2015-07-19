@@ -326,13 +326,7 @@ class Code(object):
             self.argcount,
             self.kwonlyargcount,
             len(varnames),
-            max(
-                scanl(
-                    operator.add,
-                    0,
-                    map(operator.attrgetter('stack_effect'), self.instrs)
-                ),
-            ),
+            self.stacksize,
             self.flags,
             bytes(bc),
             consts,
