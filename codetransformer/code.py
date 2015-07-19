@@ -23,11 +23,21 @@ class Flags(IntEnum):
     # call frame it setup.
     CO_NOFREE = 0x0040
 
-    # The CO_COROUTINE flag is set for coroutine functions (defined with
-    # ``async def`` keywords)
+    # The CO_COROUTINE flag is set for coroutine functions
+    # (defined with ``async def`` keywords)
     CO_COROUTINE = 0x0080
     CO_ITERABLE_COROUTINE = 0x0100
 
+    # Old values:
+    CO_FUTURE_DIVISION = 0x2000
+    CO_FUTURE_ABSOLUTE_IMPORT = 0x4000  # Do absolute imports by default.
+    CO_FUTURE_WITH_STATEMENT = 0x8000
+    CO_FUTURE_PRINT_FUNCTION = 0x10000
+    CO_FUTURE_UNICODE_LITERALS = 0x20000
+
+    CO_FUTURE_BARRY_AS_BDFL = 0x40000
+    CO_FUTURE_GENERATOR_STOP = 0x80000
+ 
 
 def _sparse_args(instrs):
     """
