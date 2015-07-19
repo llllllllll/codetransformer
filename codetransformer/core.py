@@ -32,7 +32,7 @@ class CodeTransformer(object):
     ----------
     code
     """
-    __slots__ = '_optimize', '_code_stack'
+    __slots__ = '_code_stack',
 
     def __init__(self):
         self._code_stack = []
