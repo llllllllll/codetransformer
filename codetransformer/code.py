@@ -37,13 +37,25 @@ class Flags(IntEnum):
 
     CO_FUTURE_BARRY_AS_BDFL = 0x40000
     CO_FUTURE_GENERATOR_STOP = 0x80000
- 
+
 
 def _sparse_args(instrs):
-    """
-    Makes the arguments sparse so that instructions live at the correct
+    """Makes the arguments sparse so that instructions live at the correct
     index for the jump resolution step.
-    The `None` instructions will be filtered out.
+
+    This pads the instruction set with None to mark the bytes occupied by
+    arguments.
+
+    Parameters
+    ----------
+    instrs : iterable of Instruction
+        The dense instruction set.
+
+    Yields
+    ------
+    sparse : Instruction or None
+        Yields the instructions, with objects marking the bytes that are used
+        for arguments.
     """
     for instr in instrs:
         yield instr
@@ -80,6 +92,27 @@ class Code(object):
         Is this code object a coroutine (async def)?
     iterable_coroutine : bool, optional
         Is this code object a coroutine iterator?
+
+    Attributes
+    ----------
+    argcount
+    cellvars
+    consts
+    filename
+    flags
+    freevars
+    instrs
+    is_coroutine
+    is_generator
+    is_iterable_coroutine
+    is_nested
+    kwonlyargcount
+    lnotab
+    name
+    names
+    sparse_instrs
+    stacksize
+    varnames
     """
     __slots__ = (
         '_instrs',
@@ -312,22 +345,39 @@ class Code(object):
 
     @property
     def instrs(self):
+        """The instructions in this code object.
+        """
         return self._instrs
 
     @property
     def sparse_instrs(self):
+        """The instructions where the index of an instruction
+        is the bytecode offset of that instruction.
+
+        None indicates that no instruction is at that offset.
+        """
         return tuple(_sparse_args(self.instrs))
 
     @property
     def argcount(self):
+        """The number of arguments this code object accepts.
+
+        This does not include varargs (*args).
+        """
         return self._argcount
 
     @property
     def kwonlyargcount(self):
+        """The number of keyword only arguments this code object accepts.
+
+        This does not include varkwargs (**kwargs).
+        """
         return self._kwonlyargcount
 
     @property
     def consts(self):
+        """The constants referenced in this code object.
+        """
         # We cannot use a set comprehension because consts do not need
         # to be hashable.
         consts = []
@@ -339,66 +389,110 @@ class Code(object):
 
     @property
     def names(self):
+        """The names referenced in this code object.
+
+        Names come from instructions like LOAD_GLOBAL or STORE_ATTR
+        where the name of the global or attribute is needed at runtime.
+        """
         return tuple(sorted({
             instr.arg for instr in self.instrs if instr.uses_name
         }))
 
     @property
     def argnames(self):
+        """The names of the arguments to this code object.
+
+        The format is: [args] [vararg] [kwonlyargs] [varkwarg]
+        where each group is optional.
+        """
         return self._argnames
 
     @property
     def varnames(self):
+        """The names of all of the local variables in this code object.
+        """
         return self._argnames + tuple(sorted({
             instr.arg for instr in self.instrs if instr.uses_varname
         }))
 
     @property
     def cellvars(self):
+        """The names of the variables closed over by inner code objects.
+        """
         return self._cellvars
 
     @property
     def freevars(self):
+        """The names of the variables this code object has closed over.
+        """
         return self._freevars
 
     @property
     def flags(self):
+        """The flags of this code object. This is the bitwise or of
+        the enum values defined in the Flag class.
+        """
         return self._flags
 
     @property
-    def nested(self):
+    def is_nested(self):
+        """Is this a nested code object?
+        """
         return bool(self._flags & Flags.CO_NESTED)
 
     @property
-    def generator(self):
+    def is_generator(self):
+        """Is this a generator?
+        """
         return bool(self._flags & Flags.CO_GENERATOR)
 
     @property
-    def coroutine(self):
+    def is_coroutine(self):
+        """Is this a coroutine defined with async def?
+
+        This is 3.5 and greater.
+        """
         return bool(self._flags & Flags.CO_COROUTINE)
 
     @property
-    def iterable_coroutine(self):
+    def is_iterable_coroutine(self):
+        """Is this an async iterator defined with __anext__?
+
+        This is 3.5 and greater.
+        """
         return bool(self._flags & Flags.CO_ITERABLE_COROUTINE)
 
     @property
     def filename(self):
+        """The filename of this code object.
+        """
         return self._filename
 
     @property
     def name(self):
+        """The name of this code object.
+        """
         return self._name
 
     @property
     def firstlineno(self):
+        """The first source line from self.filename
+        that this code object represents.
+        """
         return self._firstlineno
 
     @property
     def lnotab(self):
+        """The encoding of address to lineno mapping.
+
+        See Objects/lnotab_notes.txt for details.
+        """
         return self._lnotab
 
     @property
-    def stack_effect(self):
+    def stacksize(self):
+        """The maximum amount of stack space used by this code object.
+        """
         return max(scanl(
             operator.add,
             0,
@@ -423,8 +517,8 @@ class Code(object):
         """
         return self._instrs.index(instr)
 
-    def sparse_index(self, instr):
-        """Returns the index of instr in the sparse instructions.
+    def bytecode_offset(self, instr):
+        """Returns the offset of instr in the bytecode representation.
 
         Parameters
         ----------

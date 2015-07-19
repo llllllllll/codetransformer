@@ -16,6 +16,9 @@ def _a_if_not_none(a, b):
 
 
 class NoCodeContext(Exception):
+    """Exection raised to indicate that the ``code`` attribute was accessed
+    outside of a code context.
+    """
     def __init__(self):
         return super().__init__(self, 'no running code context')
 
@@ -23,6 +26,10 @@ class NoCodeContext(Exception):
 class CodeTransformer(object):
     """A code object transformer, simmilar to the NodeTransformer
     from the ast module.
+
+    Attributes
+    ----------
+    code
     """
     __slots__ = '_optimize', '_code_stack'
 
