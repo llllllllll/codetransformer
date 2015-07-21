@@ -96,6 +96,7 @@ class Code(object):
     Attributes
     ----------
     argcount
+    argnames
     cellvars
     consts
     filename
