@@ -101,13 +101,13 @@ class CodeTransformer(object):
 
     del _id
 
-    def visit(self, co, *, name=None, filename=None, lnotab=None):
-        """Visit a python code object, applying the transforms.
+    def visit(self, code, *, name=None, filename=None, lnotab=None):
+        """Visit a python object, applying the transforms.
 
         Parameters
         ----------
-        co : CodeType
-            The python code object to visit.
+        co : Code
+            The code object to visit.
         name : str, optional
             The new name for this code object.
         filename : str, optional
@@ -117,10 +117,9 @@ class CodeTransformer(object):
 
         Returns
         -------
-        new_co : CodeType
+        new_code : Code
             The visited code object.
         """
-        code = Code.from_pycode(co)
         # reverse lookups from for constants and names.
         reversed_consts = {}
         reversed_names = {}
@@ -151,7 +150,7 @@ class CodeTransformer(object):
                 generator=code.is_generator,
                 coroutine=code.is_coroutine,
                 iterable_coroutine=code.is_iterable_coroutine,
-            ).to_pycode()
+            )
 
     def __call__(self, f, *,
                  globals_=None, name=None, defaults=None, closure=None):
@@ -162,7 +161,7 @@ class CodeTransformer(object):
             closure = f.__closure__
 
         return FunctionType(
-            self.visit(f.__code__),
+            self.visit(Code.from_pycode(f.__code__)).to_pycode(),
             _a_if_not_none(globals_, f.__globals__),
             _a_if_not_none(name, f.__name__),
             _a_if_not_none(defaults, f.__defaults__),
