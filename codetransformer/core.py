@@ -4,7 +4,7 @@ from itertools import chain
 from types import CodeType, FunctionType
 
 from .code import Code
-from .instructions import LOAD_CONST
+from .instructions import LOAD_CONST, STORE_FAST, LOAD_FAST
 
 
 _cell_new = pythonapi.PyCell_New
@@ -123,11 +123,14 @@ class CodeTransformer(object):
         # reverse lookups from for constants and names.
         reversed_consts = {}
         reversed_names = {}
+        reversed_varnames = {}
         for instr in code:
             if isinstance(instr, LOAD_CONST):
                 reversed_consts[instr] = instr.arg
             if instr.uses_name:
                 reversed_names[instr] = instr.arg
+            if isinstance(instr, (STORE_FAST, LOAD_FAST)):
+                reversed_varnames[instr] = instr.arg
 
         instrs, consts = tuple(zip(*reversed_consts.items())) or ((), ())
         for instr, const in zip(instrs, self.visit_consts(consts)):
@@ -136,6 +139,10 @@ class CodeTransformer(object):
         instrs, names = tuple(zip(*reversed_names.items())) or ((), ())
         for instr, name in zip(instrs, self.visit_names(names)):
             instr.arg = name
+
+        instrs, varnames = tuple(zip(*reversed_varnames.items())) or ((), ())
+        for instr, varname in zip(instrs, self.visit_varnames(varnames)):
+            instr.arg = varname
 
         with self._new_code_context(code):
             return Code(
