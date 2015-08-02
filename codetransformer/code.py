@@ -92,6 +92,8 @@ class Code:
         Is this code object a coroutine (async def)?
     iterable_coroutine : bool, optional
         Is this code object a coroutine iterator?
+    new_locals : bool, optional
+        Should this code object construct new locals?
 
     Attributes
     ----------
@@ -102,6 +104,7 @@ class Code:
     filename
     flags
     freevars
+    has_new_locals
     instrs
     is_coroutine
     is_generator
@@ -142,7 +145,8 @@ class Code:
                  nested=False,
                  generator=False,
                  coroutine=False,
-                 iterable_coroutine=False):
+                 iterable_coroutine=False,
+                 new_locals=False):
 
         instrs = tuple(instrs)  # strictly evaluate any generators.
 
@@ -153,8 +157,9 @@ class Code:
                 (generator and Flags.CO_GENERATOR),
                 (coroutine and Flags.CO_COROUTINE),
                 (iterable_coroutine and Flags.CO_ITERABLE_COROUTINE),
+                (new_locals and Flags.CO_NEWLOCALS)
             ),
-            Flags.CO_NEWLOCALS,
+            0,
         )
 
         # The starting varnames (the names of the arguments to the function)
@@ -275,7 +280,8 @@ class Code:
             nested=flags & Flags.CO_NESTED,
             generator=flags & Flags.CO_GENERATOR,
             coroutine=flags & Flags.CO_COROUTINE,
-            iterable_coroutine=flags & Flags.CO_ITERABLE_COROUTINE
+            iterable_coroutine=flags & Flags.CO_ITERABLE_COROUTINE,
+            new_locals=flags & Flags.CO_NEWLOCALS,
         )
 
     def to_pycode(self):
@@ -458,11 +464,21 @@ class Code:
 
     @property
     def is_iterable_coroutine(self):
-        """Is this an async iterator defined with __anext__?
+        """Is this an async generator defined with types.coroutine?
 
         This is 3.5 and greater.
         """
         return bool(self._flags & Flags.CO_ITERABLE_COROUTINE)
+
+    @property
+    def has_new_locals(self):
+        """Does this code object construct new locals?
+
+        This is True for things like functions where executing the code
+        needs a new locals dict each time; however, something like a module
+        does not normally need new locals.
+        """
+        return bool(self._flags & Flags.CO_NEWLOCALS)
 
     @property
     def filename(self):
@@ -549,4 +565,3 @@ class Code:
                 return True
 
         return False
-                
