@@ -95,11 +95,11 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
     del _id
 
     def transform(self, code, *, name=None, filename=None, lnotab=None):
-        """Transform a python object, applying the transforms.
+        """Transform a codetransformer.Code object applying the transforms.
 
         Parameters
         ----------
-        co : Code
+        code : Code
             The code object to transform.
         name : str, optional
             The new name for this code object.
@@ -139,11 +139,11 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
 
         with self._new_context(code):
             instrs = tuple(code)
-            new = []
-            append_new = new.append
-            extend_new = new.extend
-            idx = 0
             len_instrs = len(instrs)
+            idx = 0  # The current index into the pre-transformed instrs.
+            post_transform = []  # The instrs that have been transformed.
+            append_new = post_transform.append
+            extend_new = post_transform.extend
             dispatcher = self._patterndispatcher
             while idx < len_instrs:
                 try:
@@ -159,7 +159,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
                     idx += len(matched)
 
             return Code(
-                new,
+                post_transform,
                 code.argnames,
                 cellvars=self.transform_cellvars(code.cellvars),
                 freevars=self.transform_freevars(code.freevars),
