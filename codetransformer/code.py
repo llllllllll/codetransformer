@@ -64,7 +64,7 @@ def _sparse_args(instrs):
             yield None
 
 
-class Code(object):
+class Code:
     """A higher abstraction over python's CodeType.
 
     See Include/code.h for more information.
@@ -536,3 +536,6 @@ class Code(object):
 
     def __iter__(self):
         return iter(self.instrs)
+
+    def __len__(self):
+        return len(self.instrs)

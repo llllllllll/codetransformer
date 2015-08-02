@@ -152,7 +152,7 @@ def test_overloaded_slices():
     def concrete_slice(slice_):
         return tuple(range(slice_.start, slice_.stop))[::slice_.step]
 
-    class C(object):
+    class C:
         _idx = None
 
         def __getitem__(self, idx):

@@ -2,6 +2,10 @@ from abc import ABCMeta, abstractmethod
 from dis import opname, opmap, hasjabs, hasjrel, HAVE_ARGUMENT, stack_effect
 
 
+from .patterns import matchable
+from .utils.immutable import immutableattr
+
+
 __all__ = ['Instruction'] + list(opmap)
 
 # The opcodes that use the co_names tuple.
@@ -34,14 +38,6 @@ _uses_free = frozenset({
 })
 
 
-class _immutableattr(object):
-    def __init__(self, op):
-        self._op = op
-
-    def __get__(self, instance, owner):
-        return self._op
-
-
 def _notimplemented_property(name):
     @property
     @abstractmethod
@@ -51,7 +47,7 @@ def _notimplemented_property(name):
     return _
 
 
-class InstructionMeta(ABCMeta):
+class InstructionMeta(ABCMeta, matchable):
     _marker = object()  # sentinel
     _type_cache = {}
 
@@ -80,18 +76,24 @@ class InstructionMeta(ABCMeta):
             raise TypeError('Invalid opcode: {}'.format(opcode))
 
         opname_ = opname[opcode]
-        dict_['opcode'] = _immutableattr(opcode)
-        dict_['absjmp'] = _immutableattr(opcode in hasjabs)
-        dict_['reljmp'] = _immutableattr(opcode in hasjrel)
-        dict_['opname'] = _immutableattr(opname[opcode])
-        dict_['uses_name'] = _immutableattr(opname_ in _uses_name)
-        dict_['uses_varname'] = _immutableattr(opname_ in _uses_varname)
-        dict_['uses_free'] = _immutableattr(opname_ in _uses_free)
-        dict_['have_arg'] = _immutableattr(opcode >= HAVE_ARGUMENT)
+        dict_['opcode'] = immutableattr(opcode)
+        dict_['absjmp'] = immutableattr(opcode in hasjabs)
+        dict_['reljmp'] = immutableattr(opcode in hasjrel)
+        dict_['opname'] = immutableattr(opname[opcode])
+        dict_['uses_name'] = immutableattr(opname_ in _uses_name)
+        dict_['uses_varname'] = immutableattr(opname_ in _uses_varname)
+        dict_['uses_free'] = immutableattr(opname_ in _uses_free)
+        dict_['have_arg'] = immutableattr(opcode >= HAVE_ARGUMENT)
         cls = mcls._type_cache[opcode] = super().__new__(
             mcls, opname[opcode], bases, dict_,
         )
         return cls
+
+    def match(self, instrs):
+        instr = instrs[0]
+        if isinstance(instr, self):
+            return instr,
+        return None
 
 
 class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):

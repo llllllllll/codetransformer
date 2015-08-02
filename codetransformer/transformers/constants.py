@@ -1,7 +1,12 @@
 import builtins
 
 from ..core import CodeTransformer
-from ..instructions import LOAD_CONST
+from ..instructions import (
+    LOAD_CONST,
+    LOAD_NAME,
+    LOAD_GLOBAL,
+)
+from ..patterns import pattern
 
 
 class asconstants(CodeTransformer):
@@ -33,19 +38,18 @@ class asconstants(CodeTransformer):
                 raise TypeError('Duplicate keys: {!r}'.format(overlap))
             constnames.update(kwargs)
 
-    def visit_names(self, names):
+    def transform_names(self, names):
         for name in names:
             if name not in self._constnames:
                 yield name
             else:
-                yield ''  # We need to keep the other indicies correct.
+                yield ''  # We need to keep the other indicies
 
-    def visit_LOAD_NAME(self, instr):
+    @pattern(LOAD_NAME | LOAD_GLOBAL)
+    def _load_name(self, instr):
         name = self._clean_co.co_names[instr.arg]
         if name not in self._constnames:
             yield instr
             return
 
         yield LOAD_CONST(self._constnames[name]).steal(instr)
-
-    visit_LOAD_GLOBAL = visit_LOAD_NAME

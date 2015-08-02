@@ -3,7 +3,9 @@ from decimal import Decimal
 from itertools import islice
 from textwrap import dedent
 
-from codetransformer import CodeTransformer, instructions
+from .. import instructions
+from ..core import CodeTransformer
+from ..patterns import pattern
 
 
 class overloaded_dicts(CodeTransformer):
@@ -45,8 +47,9 @@ class overloaded_dicts(CodeTransformer):
         super().__init__()
         self._astype = astype
 
-    def visit_BUILD_MAP(self, instr):
-        yield self.LOAD_CONST(self._astype).steal(instr)
+    @pattern(instructions.BUILD_MAP)
+    def _build_map(self, instr):
+        yield instructions.LOAD_CONST(self._astype).steal(instr)
         # TOS  = self._astype
 
         yield instructions.CALL_FUNCTION(0)
@@ -57,7 +60,8 @@ class overloaded_dicts(CodeTransformer):
         # ...
         # TOS[instr.arg] = m
 
-    def visit_STORE_MAP(self, instr):
+    @pattern(instructions.STORE_MAP)
+    def _store_map(self, instr):
         # TOS  = k
         # TOS1 = v
         # TOS2 = m
@@ -108,13 +112,13 @@ class _ConstantTransformerBase(CodeTransformer):
         super().__init__()
         self.f = f
 
-    def visit_consts(self, consts):
+    def transform_consts(self, consts):
         # This is all one expression.
-        return super().visit_consts(
+        return super().transform_consts(
             tuple(
-                frozenset(self.visit_consts(tuple(const)))
+                frozenset(self.transform_consts(tuple(const)))
                 if isinstance(const, frozenset)
-                else self.visit_consts(const)
+                else self.transform_consts(const)
                 if isinstance(const, tuple)
                 else self.f(const)
                 if isinstance(const, self._type)
@@ -203,7 +207,7 @@ def overloaded_build(instruction, type_):
     return type(
         'overloaded_' + typename,
         (overloaded_constants(type_),),
-        {'visit_' + opname: _visit_build},
+        {'_visit_build': pattern(instruction)(_visit_build)},
     )
 
 overloaded_slices = overloaded_build(instructions.BUILD_SLICE, slice)
@@ -212,16 +216,16 @@ overloaded_sets = overloaded_build(instructions.BUILD_SET, set)
 
 
 # Add a special method for set overloader.
-def visit_consts(self, consts):
-    consts = super(overloaded_sets, self).visit_consts(consts)
+def transform_consts(self, consts):
+    consts = super(overloaded_sets, self).transform_consts(consts)
     return tuple(
         # Always pass a thawed set so mutations can happen inplace.
         self.f(set(const)) if isinstance(const, frozenset) else const
         for const in consts
     )
 
-overloaded_sets.visit_consts = visit_consts
-del visit_consts
+overloaded_sets.transform_consts = transform_consts
+del transform_consts
 frozenset_literals = overloaded_sets(frozenset)
 
 
@@ -229,15 +233,15 @@ overloaded_tuples = overloaded_build(instructions.BUILD_TUPLE, tuple)
 
 
 # Add a special method for the tuple overloader.
-def visit_consts(self, consts):
-    consts = super(overloaded_tuples, self).visit_consts(consts)
+def transform_consts(self, consts):
+    consts = super(overloaded_tuples, self).transform_consts(consts)
     return tuple(
         self.f(const) if isinstance(const, tuple) else const
         for const in consts
     )
 
-overloaded_tuples.visit_consts = visit_consts
-del visit_consts
+overloaded_tuples.transform_consts = transform_consts
+del transform_consts
 
 
 def singleton(cls):
@@ -260,7 +264,8 @@ class islice_literals(CodeTransformer):
     >>> tuple(f())
     ('1', '2')
     """
-    def visit_BINARY_SUBSCR(self, instr):
+    @pattern(instructions.BINARY_SUBSCR)
+    def _binary_subscr(self, instr):
         yield instructions.LOAD_CONST(self._islicer).steal(instr)
         # TOS  = self._islicer
         # TOS1 = k

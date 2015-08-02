@@ -6,14 +6,16 @@ from enum import (
 )
 
 
-from codetransformer.core import CodeTransformer
-from codetransformer.instructions import (
+from ..core import CodeTransformer
+from ..instructions import (
     CALL_FUNCTION,
     CALL_FUNCTION_VAR,
+    COMPARE_OP,
     LOAD_CONST,
     POP_TOP,
     ROT_TWO,
 )
+from ..patterns import pattern
 
 
 @unique
@@ -89,7 +91,8 @@ class pattern_matched_exceptions(CodeTransformer):
         super().__init__()
         self._matcher = matcher
 
-    def visit_COMPARE_OP(self, instr):
+    @pattern(COMPARE_OP)
+    def _compare_op(self, instr):
         if instr.arg == Comparisons.EXCEPTION_MATCH:
             yield ROT_TWO().steal(instr)
             yield POP_TOP()

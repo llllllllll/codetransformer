@@ -1,10 +1,11 @@
+from collections import OrderedDict
 from contextlib import contextmanager
 from ctypes import py_object, pythonapi
-from itertools import chain
 from types import CodeType, FunctionType
 
 from .code import Code
 from .instructions import LOAD_CONST, STORE_FAST, LOAD_FAST
+from .patterns import boundpattern, patterndispatcher
 
 
 _cell_new = pythonapi.PyCell_New
@@ -16,15 +17,26 @@ def _a_if_not_none(a, b):
     return a if a is not None else b
 
 
-class NoCodeContext(Exception):
-    """Exection raised to indicate that the ``code`` attribute was accessed
-    outside of a code context.
+class NoContext(Exception):
+    """Exception raised to indicate that the ``code` or ``startcode``
+    attribute was accessed outside of a code context.
     """
     def __init__(self):
-        return super().__init__('no code context')
+        return super().__init__('no context')
 
 
-class CodeTransformer(object):
+class CodeTransformerMeta(type):
+    def __new__(mcls, name, bases, dict_):
+        dict_['_patterndispatcher'] = patterndispatcher(
+            *(v for v in dict_.values() if isinstance(v, boundpattern))
+        )
+        return super().__new__(mcls, name, bases, dict_)
+
+    def __prepare__(self, bases):
+        return OrderedDict()
+
+
+class CodeTransformer(metaclass=CodeTransformerMeta):
     """A code object transformer, simmilar to the NodeTransformer
     from the ast module.
 
@@ -32,33 +44,14 @@ class CodeTransformer(object):
     ----------
     code
     """
-    __slots__ = '_code_stack',
+    __slots__ = '_code_stack', '_startcode_stack'
 
     def __init__(self):
         self._code_stack = []
+        self._startcode_stack = []
 
-    def visit_generic(self, instr):
-        """Generic visitor, calls the correct visit function for the given
-        instruction.
-
-        Parameters
-        ----------
-        instr : Instruction
-            The instruction to visit.
-
-        Yields
-        ------
-        new_instr : Instruction
-            The new instructions to replace this one with.
-        """
-        if instr is None:
-            yield None
-            return
-
-        yield from getattr(self, 'visit_' + instr.opname, lambda *a: a)(instr)
-
-    def visit_consts(self, consts):
-        """visitor for the co_consts field.
+    def transform_consts(self, consts):
+        """transformer for the co_consts field.
 
         Override this method to transform the `co_consts` of the code object.
 
@@ -73,7 +66,7 @@ class CodeTransformer(object):
             The new constants.
         """
         return tuple(
-            self.visit(const) if isinstance(const, CodeType) else const
+            self.transform(const) if isinstance(const, CodeType) else const
             for const in consts
         )
 
@@ -92,22 +85,22 @@ class CodeTransformer(object):
         """
         return obj
 
-    visit_name = _id
-    visit_names = _id
-    visit_varnames = _id
-    visit_freevars = _id
-    visit_cellvars = _id
-    visit_defaults = _id
+    transform_name = _id
+    transform_names = _id
+    transform_varnames = _id
+    transform_freevars = _id
+    transform_cellvars = _id
+    transform_defaults = _id
 
     del _id
 
-    def visit(self, code, *, name=None, filename=None, lnotab=None):
-        """Visit a python object, applying the transforms.
+    def transform(self, code, *, name=None, filename=None, lnotab=None):
+        """Transform a python object, applying the transforms.
 
         Parameters
         ----------
         co : Code
-            The code object to visit.
+            The code object to transform.
         name : str, optional
             The new name for this code object.
         filename : str, optional
@@ -118,7 +111,7 @@ class CodeTransformer(object):
         Returns
         -------
         new_code : Code
-            The visited code object.
+            The transformed code object.
         """
         # reverse lookups from for constants and names.
         reversed_consts = {}
@@ -133,23 +126,43 @@ class CodeTransformer(object):
                 reversed_varnames[instr] = instr.arg
 
         instrs, consts = tuple(zip(*reversed_consts.items())) or ((), ())
-        for instr, const in zip(instrs, self.visit_consts(consts)):
+        for instr, const in zip(instrs, self.transform_consts(consts)):
             instr.arg = const
 
         instrs, names = tuple(zip(*reversed_names.items())) or ((), ())
-        for instr, name in zip(instrs, self.visit_names(names)):
+        for instr, name in zip(instrs, self.transform_names(names)):
             instr.arg = name
 
         instrs, varnames = tuple(zip(*reversed_varnames.items())) or ((), ())
-        for instr, varname in zip(instrs, self.visit_varnames(varnames)):
+        for instr, varname in zip(instrs, self.transform_varnames(varnames)):
             instr.arg = varname
 
-        with self._new_code_context(code):
+        with self._new_context(code):
+            instrs = tuple(code)
+            new = []
+            append_new = new.append
+            extend_new = new.extend
+            idx = 0
+            len_instrs = len(instrs)
+            dispatcher = self._patterndispatcher
+            while idx < len_instrs:
+                try:
+                    processed, matched = dispatcher(
+                        instrs[idx:],
+                        self.startcode
+                    )
+                except KeyError:
+                    append_new(instrs[idx])
+                    idx += 1
+                else:
+                    extend_new(processed)
+                    idx += len(matched)
+
             return Code(
-                chain.from_iterable(map(self.visit_generic, code)),
+                new,
                 code.argnames,
-                cellvars=self.visit_cellvars(code.cellvars),
-                freevars=self.visit_freevars(code.freevars),
+                cellvars=self.transform_cellvars(code.cellvars),
+                freevars=self.transform_freevars(code.freevars),
                 name=name if name is not None else code.name,
                 filename=filename if filename is not None else code.filename,
                 lnotab=lnotab if lnotab is not None else code.lnotab,
@@ -168,7 +181,7 @@ class CodeTransformer(object):
             closure = f.__closure__
 
         return FunctionType(
-            self.visit(Code.from_pycode(f.__code__)).to_pycode(),
+            self.transform(Code.from_pycode(f.__code__)).to_pycode(),
             _a_if_not_none(globals_, f.__globals__),
             _a_if_not_none(name, f.__name__),
             _a_if_not_none(defaults, f.__defaults__),
@@ -176,12 +189,14 @@ class CodeTransformer(object):
         )
 
     @contextmanager
-    def _new_code_context(self, code):
+    def _new_context(self, code):
         self._code_stack.append(code)
+        self._startcode_stack.append(0)
         try:
             yield
         finally:
             self._code_stack.pop()
+            self._startcode_stack.pop()
 
     @property
     def code(self):
@@ -190,4 +205,26 @@ class CodeTransformer(object):
         try:
             return self._code_stack[-1]
         except IndexError:
-            raise NoCodeContext()
+            raise NoContext()
+
+    @property
+    def startcode(self):
+        """The startcode we are currently in.
+        """
+        try:
+            return self._startcode_stack[-1]
+        except IndexError:
+            raise NoContext()
+
+    def begin(self, startcode):
+        """Begin a new startcode.
+
+        Parameters
+        ----------
+        startcode : any
+            The startcode to begin.
+        """
+        try:
+            self._startcode_stack[-1] = startcode
+        except IndexError:
+            raise NoContext()

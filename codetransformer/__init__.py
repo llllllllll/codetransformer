@@ -1,5 +1,6 @@
 from .code import Code
 from .core import CodeTransformer
+from . patterns import pattern
 from . import instructions
 from . import transformers
 
@@ -9,5 +10,6 @@ __all__ = [
     'Code',
     'CodeTransformer',
     'instructions',
+    'pattern',
     'transformers',
 ]
