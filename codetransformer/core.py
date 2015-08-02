@@ -130,8 +130,8 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
             instr.arg = const
 
         instrs, names = tuple(zip(*reversed_names.items())) or ((), ())
-        for instr, name in zip(instrs, self.transform_names(names)):
-            instr.arg = name
+        for instr, name_ in zip(instrs, self.transform_names(names)):
+            instr.arg = name_
 
         instrs, varnames = tuple(zip(*reversed_varnames.items())) or ((), ())
         for instr, varname in zip(instrs, self.transform_varnames(varnames)):
