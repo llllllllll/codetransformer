@@ -38,16 +38,9 @@ class asconstants(CodeTransformer):
                 raise TypeError('Duplicate keys: {!r}'.format(overlap))
             constnames.update(kwargs)
 
-    def transform_names(self, names):
-        for name in names:
-            if name not in self._constnames:
-                yield name
-            else:
-                yield ''  # We need to keep the other indicies
-
     @pattern(LOAD_NAME | LOAD_GLOBAL)
     def _load_name(self, instr):
-        name = self._clean_co.co_names[instr.arg]
+        name = instr.arg
         if name not in self._constnames:
             yield instr
             return

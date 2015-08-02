@@ -501,9 +501,6 @@ class Code:
             map(operator.attrgetter('stack_effect'), self.instrs),
         ))
 
-    def __getitem__(self, key):
-        return self.instrs[key]
-
     def index(self, instr):
         """Returns the index of instr.
 
@@ -534,8 +531,22 @@ class Code:
         """
         return self.sparse_instrs.index(instr)
 
+    def __getitem__(self, key):
+        return self.instrs[key]
+
     def __iter__(self):
         return iter(self.instrs)
 
     def __len__(self):
         return len(self.instrs)
+
+    def __contains__(self, instr):
+        type_ = type(instr)
+        for c in self:
+            if (isinstance(c, type_) and
+                    isinstance(instr, type(c)) and
+                    (instr.arg == c.arg if instr.have_arg else True)):
+                return True
+
+        return False
+                
