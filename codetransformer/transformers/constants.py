@@ -1,6 +1,7 @@
 import builtins
 
-from codetransformer.core import CodeTransformer
+from ..core import CodeTransformer
+from ..instructions import LOAD_CONST
 
 
 class asconstants(CodeTransformer):
@@ -19,6 +20,7 @@ class asconstants(CodeTransformer):
     1
     """
     def __init__(self, *args, **kwargs):
+        super().__init__()
         bltins = vars(builtins)
         if not (args or kwargs):
             self._constnames = bltins.copy()
@@ -44,6 +46,6 @@ class asconstants(CodeTransformer):
             yield instr
             return
 
-        yield self.LOAD_CONST(self._constnames[name]).steal(instr)
+        yield LOAD_CONST(self._constnames[name]).steal(instr)
 
     visit_LOAD_GLOBAL = visit_LOAD_NAME

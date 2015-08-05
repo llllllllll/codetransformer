@@ -3,7 +3,7 @@ from decimal import Decimal
 from itertools import islice
 from textwrap import dedent
 
-from codetransformer import CodeTransformer, instructions, context_free
+from codetransformer import CodeTransformer, instructions
 
 
 class overloaded_dicts(CodeTransformer):
@@ -41,8 +41,8 @@ class overloaded_dicts(CodeTransformer):
     >>> f()
     OrderedDict([('a', 1), ('b', 2), ('c', 3)])
     """
-    def __init__(self, astype, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, astype):
+        super().__init__()
         self._astype = astype
 
     def visit_BUILD_MAP(self, instr):
@@ -104,9 +104,9 @@ def _format_constant_docstring(type_):
 
 class _ConstantTransformerBase(CodeTransformer):
 
-    def __init__(self, f, *, optimize=True):
+    def __init__(self, f):
+        super().__init__()
         self.f = f
-        super().__init__(optimize=optimize)
 
     def visit_consts(self, consts):
         # This is all one expression.
@@ -145,7 +145,7 @@ def overloaded_constants(type_):
     return type(
         "overloaded_" + typename,
         (_ConstantTransformerBase,), {
-            '_type': context_free(type_),
+            '_type': type_,
             '__doc__': _format_constant_docstring(type_),
         },
     )
@@ -164,7 +164,7 @@ def _visit_build(self, instr):
     yield instr
     # TOS  = new_list
 
-    yield self.LOAD_CONST(self.f)
+    yield instructions.LOAD_CONST(self.f)
     # TOS  = astype
     # TOS1 = new_list
 
@@ -261,7 +261,7 @@ class islice_literals(CodeTransformer):
     ('1', '2')
     """
     def visit_BINARY_SUBSCR(self, instr):
-        yield self.LOAD_CONST(self._islicer).steal(instr)
+        yield instructions.LOAD_CONST(self._islicer).steal(instr)
         # TOS  = self._islicer
         # TOS1 = k
         # TOS2 = m

@@ -62,7 +62,7 @@ def test_overloaded_floats():
     def float_in_set(x):
         return x in {3.0}
 
-    xformed_const = float_in_set.__code__.co_consts[2]
+    xformed_const = float_in_set.__code__.co_consts[0]
     assert isinstance(xformed_const, frozenset)
     assert len(xformed_const) == 1
     assert isinstance(tuple(xformed_const)[0], Decimal)
@@ -172,8 +172,8 @@ def test_overloaded_slices():
 def test_islice_literals():
 
     @islice_literals
-    def f():
+    def islice_test():
         return map(str, (1, 2, 3, 4))[:2]
 
-    assert isinstance(f(), islice)
-    assert tuple(f()) == ('1', '2')
+    assert isinstance(islice_test(), islice)
+    assert tuple(islice_test()) == ('1', '2')
