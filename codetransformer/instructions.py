@@ -89,11 +89,8 @@ class InstructionMeta(ABCMeta, matchable):
         )
         return cls
 
-    def match(self, instrs):
-        instr = instrs[0]
-        if isinstance(instr, self):
-            return instr,
-        return None
+    def mcompile(self):
+        return bytes((self.opcode,))
 
 
 class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):

@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from contextlib import contextmanager
 from ctypes import py_object, pythonapi
+from operator import attrgetter
 from types import CodeType, FunctionType
 
 from .code import Code
@@ -139,6 +140,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
 
         with self._new_context(code):
             instrs = tuple(code)
+            compiled_instrs = bytes(map(attrgetter('opcode'), instrs))
             len_instrs = len(instrs)
             idx = 0  # The current index into the pre-transformed instrs.
             post_transform = []  # The instrs that have been transformed.
@@ -147,7 +149,8 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
             dispatcher = self._patterndispatcher
             while idx < len_instrs:
                 try:
-                    processed, matched = dispatcher(
+                    processed, nconsumed = dispatcher(
+                        compiled_instrs[idx:],
                         instrs[idx:],
                         self.startcode
                     )
@@ -156,7 +159,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
                     idx += 1
                 else:
                     extend_new(processed)
-                    idx += len(matched)
+                    idx += nconsumed
 
             return Code(
                 post_transform,
