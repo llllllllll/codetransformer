@@ -92,6 +92,10 @@ class InstructionMeta(ABCMeta, matchable):
     def mcompile(self):
         return bytes((self.opcode,))
 
+    def __repr__(self):
+        return self.opname
+    __str__ = __repr__
+
 
 class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
     """An abstraction of an instruction.

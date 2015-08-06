@@ -20,6 +20,9 @@ def _no_arg_init(self):
     pass
 
 
+object_setattr = object.__setattr__
+
+
 def initialize_slot(obj, name, value):
     """Initalize an unitialized slot to a value.
 
@@ -35,7 +38,7 @@ def initialize_slot(obj, name, value):
         The value to initialize the slot to.
     """
     if not hasattr(obj, name):
-        object.__setattr__(obj, name, value)
+        object_setattr(obj, name, value)
 
 
 def _create_init(slots, defaults):
@@ -128,8 +131,45 @@ def _create_init(slots, defaults):
     return init, slotnames
 
 
+def _wrapinit(init):
+    """Wrap an existing initialize function by thawing self for the duration
+    of the init.
+
+    Parameters
+    ----------
+    init : callable
+        The user-provided init.
+
+    Returns
+    -------
+    wrapped : callable
+        The wrapped init method.
+    """
+    def __init__(*args, **kwargs):
+        self = args[0]  # they could name this whatever and this breaks kwargs.
+
+        __setattr__._initializing.add(self)
+        init(*args, **kwargs)
+        __setattr__._initializing.remove(self)
+
+        missing_slots = tuple(
+            filter(lambda s: not hasattr(self, s), self.__slots__),
+        )
+        if missing_slots:
+            raise TypeError(
+                'not all slots initialized in __init__, missing: {0}'.format(
+                    missing_slots,
+                ),
+            )
+
+    return __init__
+
+
 def __setattr__(self, name, value):
-    raise AttributeError('cannot mutate immutable object')
+    if self not in __setattr__._initializing:
+        raise AttributeError('cannot mutate immutable object')
+    object_setattr(self, name, value)
+__setattr__._initializing = set()
 
 
 def __repr__(self):
@@ -146,16 +186,18 @@ class ImmutableMeta(type):
     """A metaclass for creating immutable objects.
     """
     def __new__(mcls, name, bases, dict_, *, defaults=None):
-        if '__init__' in dict_:
-            raise TypeError('immutable classes cannot have an __init__')
         if '__slots__' not in dict_:
             raise TypeError('immutable classes must have a __slots__')
         if '__setattr__' in dict_:
-            raise TypeError('immutable classes cannot have a __setatt__')
+            raise TypeError('immutable classes cannot have a __setattr__')
 
-        dict_['__init__'], dict_['__slots__'] = _create_init(
-            dict_['__slots__'], defaults,
-        )
+        try:
+            dict_['__init__'] = _wrapinit(dict_['__init__'])
+        except KeyError:
+            dict_['__init__'], dict_['__slots__'] = _create_init(
+                dict_['__slots__'], defaults,
+            )
+
         dict_['__setattr__'] = __setattr__
         cls = super().__new__(mcls, name, bases, dict_)
 

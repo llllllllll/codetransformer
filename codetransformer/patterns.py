@@ -1,11 +1,19 @@
-from operator import methodcaller
+from operator import methodcaller, index
 import re
 from types import MethodType
 
+from .utils.instance import instance
 from .utils.immutable import immutable
 
 
 mcompile = methodcaller('mcompile')
+
+
+def _prepr(m):
+    if isinstance(m, or_):
+        return '(%r)' % m
+
+    return repr(m)
 
 
 class matchable:
@@ -15,16 +23,18 @@ class matchable:
         if self is other:
             return self
 
-        if not isinstance(other, matchable):
+        if other is ...:
+            other = matchany
+        elif not isinstance(other, matchable):
             return NotImplemented
 
         patterns = []
         if isinstance(self, or_):
-            patterns.extend(self.patterns)
+            patterns.extend(self.matchables)
         else:
             patterns.append(self)
         if isinstance(other, or_):
-            patterns.extend(other.patterns)
+            patterns.extend(other.matchables)
         else:
             patterns.append(other)
 
@@ -37,6 +47,103 @@ class matchable:
     def __invert__(self):
         return not_(self)
 
+    def __getitem__(self, key):
+        try:
+            n = index(key)
+        except TypeError:
+            pass
+        else:
+            return matchnm(self, n)
+
+        if isinstance(key, tuple) and len(key) in (1, 2):
+            return matchnm(self, *key)
+
+        if not isinstance(key, modifier):
+            raise TypeError('invalid modifier: {0}'.format(key))
+
+        return modified(self, key)
+
+
+class modified(immutable, matchable):
+    """A pattern with a modifier paired with it.
+    """
+    __slots__ = 'matchable', 'modifier'
+
+    def mcompile(self):
+        return self.matchable.mcompile() + self.modifier.mcompile()
+
+    def __repr__(self):
+        return '%r[%r]' % (self.matchable, self.modifier)
+    __str__ = __repr__
+
+
+class meta:
+    """Class for meta patterns and pattern likes.
+    """
+    def mcompile(self):
+        return self._token
+
+    def __repr__(self):
+        return self._token.decode('utf-8')
+    __str__ = __repr__
+
+
+class modifier(meta):
+    """Marker class for modifier types.
+    """
+    pass
+
+
+@instance
+class star(modifier):
+    """Modifier that matches zero or more of a pattern.
+    """
+    _token = b'*'
+
+
+@instance
+class plus(modifier):
+    """Modifier that matches one or more of a pattern.
+    """
+    _token = b'+'
+
+
+@instance
+class option(modifier):
+    """Modifier that matches zero or one of a pattern.
+    """
+    _token = b'?'
+
+
+class matchnm(immutable, meta, defaults={'m': None}):
+    __slots__ = 'matchable', 'n', 'm'
+
+    def mcompile(self):
+        m = self.m
+        return (
+            self.matchable.mcompile() +
+            b'{' +
+            bytes(str(self.n), 'utf-8') +
+            (b'' if m is None else (b', ' + bytes(str(m), 'utf-8'))) +
+            b'}'
+        )
+
+    def __repr__(self):
+        return '{matchable}[{args}]'.format(
+            matchable=_prepr(self.matchable),
+            args=', '.join(map(str, filter(bool, (self.n, self.m)))),
+        )
+
+
+@instance
+class matchany(meta, matchable):
+    """Matchable that matches any instruction.
+    """
+    _token = b'.'
+
+    def __repr__(self):
+        return '...'
+
 
 class seq(immutable, matchable):
     """A sequence of matchables to match in order.
@@ -48,8 +155,26 @@ class seq(immutable, matchable):
     """
     __slots__ = '*matchables',
 
+    def __new__(cls, *matchables):
+        if not matchables:
+            raise TypeError('cannot create an empty sequence')
+
+        if len(matchables) == 1:
+            m = matchables[0]
+            if m is ...:
+                return matchany
+            return m
+
+        return super().__new__(cls)
+
     def mcompile(self):
         return b''.join(map(mcompile, self.matchables))
+
+    def __repr__(self):
+        return '{cls}({args})'.format(
+            cls=type(self).__name__,
+            args=', '.join(map(_prepr, self.matchables))
+        )
 
 
 class or_(immutable, matchable):
@@ -65,6 +190,9 @@ class or_(immutable, matchable):
     def mcompile(self):
         return b'(' + b'|'.join(map(mcompile, self.matchables)) + b')'
 
+    def __repr__(self):
+        return ' | '.join(map(_prepr, self.matchables))
+
 
 class not_(immutable):
     """Logical not of a matchable.
@@ -78,36 +206,38 @@ class not_(immutable):
 
         return b'[^' + matchable.mcompile() + b']'
 
+    def __repr__(self):
+        return '~' + _prepr(self.matchable)
 
-class pattern(immutable, defaults={'startcodes': (0,)}):
+
+class pattern(immutable):
     """A pattern of instructions that can be matched against.
 
     Parameters
     ----------
     *matchables : iterable of matchable
         The type of instructions to match against.
-    startcode : container of any
+    startcodes : container of any
         The startcodes where this pattern should be tried.
     """
-    __slots__ = 'compiled', 'startcodes'
+    __slots__ = 'matchable', 'startcodes', '_compiled'
 
-    def __new__(cls, *matchables, startcodes=(0,)):
+    def __init__(self, *matchables, startcodes=(1,)):
         if not matchables:
             raise TypeError('expected at least one matchable')
-
-        self = super().__new__(cls)
-        self.__init__(
-            re.compile(
-                (seq(*matchables)
-                 if len(matchables) > 1 else
-                 matchables[0]).mcompile(),
-            ),
-            startcodes,
-        )
-        return self
+        self.matchable = matchable = seq(*matchables)
+        self.startcodes = startcodes
+        self._compiled = re.compile(matchable.mcompile())
 
     def __call__(self, f):
-        return boundpattern(self.compiled, self.startcodes, f)
+        return boundpattern(self._compiled, self.startcodes, f)
+
+    def __repr__(self):
+        return '{cls}(matchable={m!r}, startcodes={s})'.format(
+            cls=type(self).__name__,
+            m=self.matchable,
+            s=self.startcodes,
+        )
 
 
 class boundpattern(immutable):
