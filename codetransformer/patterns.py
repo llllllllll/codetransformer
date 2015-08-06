@@ -16,16 +16,24 @@ def _prepr(m):
     return repr(m)
 
 
+def coerce_ellipsis(p):
+    """Convert ... into a matchany
+    """
+    if p is ...:
+        return matchany
+
+    return p
+
+
 class matchable:
     """Mixin for defining the operators on patterns.
     """
     def __or__(self, other):
+        other = coerce_ellipsis(other)
         if self is other:
             return self
 
-        if other is ...:
-            other = matchany
-        elif not isinstance(other, matchable):
+        if not isinstance(other, matchable):
             return NotImplemented
 
         patterns = []
@@ -42,7 +50,7 @@ class matchable:
 
     def __ror__(self, other):
         # Flip the order on the or method
-        return type(self).__or__(other, self)
+        return type(self).__or__(coerce_ellipsis(other), self)
 
     def __invert__(self):
         return not_(self)
@@ -153,19 +161,18 @@ class seq(immutable, matchable):
     *matchables : iterable of matchable
         The matchables to match against.
     """
-    __slots__ = '*matchables',
+    __slots__ = 'matchables',
 
     def __new__(cls, *matchables):
         if not matchables:
             raise TypeError('cannot create an empty sequence')
 
         if len(matchables) == 1:
-            m = matchables[0]
-            if m is ...:
-                return matchany
-            return m
-
+            return coerce_ellipsis(matchables[0])
         return super().__new__(cls)
+
+    def __init__(self, *matchables):
+        self.matchables = tuple(map(coerce_ellipsis, matchables))
 
     def mcompile(self):
         return b''.join(map(mcompile, self.matchables))
