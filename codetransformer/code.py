@@ -100,11 +100,11 @@ class Code:
     argcount
     argnames
     cellvars
+    constructs_new_locals
     consts
     filename
     flags
     freevars
-    has_new_locals
     instrs
     is_coroutine
     is_generator
@@ -471,7 +471,7 @@ class Code:
         return bool(self._flags & Flags.CO_ITERABLE_COROUTINE)
 
     @property
-    def has_new_locals(self):
+    def constructs_new_locals(self):
         """Does this code object construct new locals?
 
         This is True for things like functions where executing the code
@@ -557,11 +557,4 @@ class Code:
         return len(self.instrs)
 
     def __contains__(self, instr):
-        type_ = type(instr)
-        for c in self:
-            if (isinstance(c, type_) and
-                    isinstance(instr, type(c)) and
-                    (instr.arg == c.arg if instr.have_arg else True)):
-                return True
-
-        return False
+        return instr in self.instrs

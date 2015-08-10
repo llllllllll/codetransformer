@@ -20,14 +20,10 @@ def test_name():
 
         if isinstance(const, CodeType):
             pre_transform = Code.from_pycode(const)
-            assert LOAD_NAME('a') in pre_transform
             code = asconstants(a=1).transform(pre_transform)
             break
     else:
         raise AssertionError('There should be a code object in there!')
-
-    assert LOAD_CONST(1) in code
-    assert LOAD_NAME('a') not in code
 
     ns = {}
     exec(code.to_pycode(), ns)

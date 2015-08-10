@@ -27,6 +27,12 @@ class NoContext(Exception):
 
 
 class CodeTransformerMeta(type):
+    """Meta class for CodeTransformer to collect all of the patterns
+    and ensure the class dict is ordered.
+
+    Patterns are created when a method is decorated with
+    ``codetransformer.pattern.pattern``
+    """
     def __new__(mcls, name, bases, dict_):
         dict_['_patterndispatcher'] = patterndispatcher(
             *(v for v in dict_.values() if isinstance(v, boundpattern))
@@ -140,7 +146,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
 
         with self._new_context(code):
             instrs = tuple(code)
-            compiled_instrs = bytes(map(attrgetter('opcode'), instrs))
+            opcodes = bytes(map(attrgetter('opcode'), instrs))
             len_instrs = len(instrs)
             idx = 0  # The current index into the pre-transformed instrs.
             post_transform = []  # The instrs that have been transformed.
@@ -150,7 +156,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
             while idx < len_instrs:
                 try:
                     processed, nconsumed = dispatcher(
-                        compiled_instrs[idx:],
+                        opcodes[idx:],
                         instrs[idx:],
                         self.startcode
                     )
