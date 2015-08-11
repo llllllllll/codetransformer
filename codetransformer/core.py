@@ -6,7 +6,7 @@ from types import CodeType, FunctionType
 
 from .code import Code
 from .instructions import LOAD_CONST, STORE_FAST, LOAD_FAST
-from .patterns import boundpattern, patterndispatcher
+from .patterns import boundpattern, patterndispatcher, NoMatches
 
 
 _cell_new = pythonapi.PyCell_New
@@ -156,7 +156,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
                         code[idx:],
                         self.startcode
                     )
-                except KeyError:
+                except NoMatches:
                     post_transform.append(code[idx])
                     idx += 1
                 else:

@@ -268,6 +268,12 @@ class boundpattern(immutable):
         return self._f(*instrs[:mend]), mend
 
 
+class NoMatches(Exception):
+    """Indicates that there was no match found in this dispatcher.
+    """
+    pass
+
+
 class patterndispatcher(immutable):
     """A set of boundpatterns that can dispatch onto instrs.
     """
@@ -286,4 +292,4 @@ class patterndispatcher(immutable):
             except KeyError:
                 pass
 
-        raise KeyError(instrs, startcode)
+        raise NoMatches(instrs, startcode)
