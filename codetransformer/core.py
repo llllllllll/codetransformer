@@ -145,26 +145,22 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
             instr.arg = varname
 
         with self._new_context(code):
-            instrs = tuple(code)
-            opcodes = bytes(map(attrgetter('opcode'), instrs))
-            len_instrs = len(instrs)
+            opcodes = bytes(map(attrgetter('opcode'), code))
             idx = 0  # The current index into the pre-transformed instrs.
             post_transform = []  # The instrs that have been transformed.
-            append_new = post_transform.append
-            extend_new = post_transform.extend
             dispatcher = self._patterndispatcher
-            while idx < len_instrs:
+            while idx < len(code):
                 try:
                     processed, nconsumed = dispatcher(
                         opcodes[idx:],
-                        instrs[idx:],
+                        code[idx:],
                         self.startcode
                     )
                 except KeyError:
-                    append_new(instrs[idx])
+                    post_transform.append(code[idx])
                     idx += 1
                 else:
-                    extend_new(processed)
+                    post_transform.extend(processed)
                     idx += nconsumed
 
             return Code(
