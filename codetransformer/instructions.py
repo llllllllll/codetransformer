@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dis import opname, opmap, hasjabs, hasjrel, HAVE_ARGUMENT, stack_effect
+from re import escape
 
 
 from .patterns import matchable
@@ -90,7 +91,7 @@ class InstructionMeta(ABCMeta, matchable):
         return cls
 
     def mcompile(self):
-        return bytes((self.opcode,))
+        return escape(bytes((self.opcode,)))
 
     def __repr__(self):
         return self.opname
