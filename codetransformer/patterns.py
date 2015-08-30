@@ -6,6 +6,7 @@ from .utils.instance import instance
 from .utils.immutable import immutable
 
 
+DEFAULT_STARTCODE = 0
 mcompile = methodcaller('mcompile')
 
 
@@ -50,6 +51,9 @@ class matchable:
 
     def __ror__(self, other):
         # Flip the order on the or method
+        if not isinstance(other, matchable):
+            return NotImplemented
+
         return type(self).__or__(coerce_ellipsis(other), self)
 
     def __invert__(self):
@@ -61,18 +65,18 @@ class matchable:
         except TypeError:
             pass
         else:
-            return matchnm(self, n)
+            return matchrange(self, n)
 
         if isinstance(key, tuple) and len(key) in (1, 2):
-            return matchnm(self, *key)
+            return matchrange(self, *key)
 
-        if not isinstance(key, modifier):
-            raise TypeError('invalid modifier: {0}'.format(key))
+        if isinstance(key, modifier):
+            return postfix_modifier(self, key)
 
-        return modified(self, key)
+        raise TypeError('invalid modifier: {0}'.format(key))
 
 
-class modified(immutable, matchable):
+class postfix_modifier(immutable, matchable):
     """A pattern with a modifier paired with it.
     """
     __slots__ = 'matchable', 'modifier'
@@ -85,8 +89,8 @@ class modified(immutable, matchable):
     __str__ = __repr__
 
 
-class meta:
-    """Class for meta patterns and pattern likes.
+class meta(matchable):
+    """Class for meta patterns and pattern likes. for example: ``matchany``.
     """
     def mcompile(self):
         return self._token
@@ -123,7 +127,7 @@ class option(modifier):
     _token = b'?'
 
 
-class matchnm(immutable, meta, defaults={'m': None}):
+class matchrange(immutable, meta, defaults={'m': None}):
     __slots__ = 'matchable', 'n', 'm'
 
     def mcompile(self):
@@ -132,7 +136,7 @@ class matchnm(immutable, meta, defaults={'m': None}):
             self.matchable.mcompile() +
             b'{' +
             bytes(str(self.n), 'utf-8') +
-            (b'' if m is None else (b', ' + bytes(str(m), 'utf-8'))) +
+            b',' + (b'' if m is None else (b', ' + bytes(str(m), 'utf-8'))) +
             b'}'
         )
 
@@ -144,7 +148,7 @@ class matchnm(immutable, meta, defaults={'m': None}):
 
 
 @instance
-class matchany(meta, matchable):
+class matchany(meta):
     """Matchable that matches any instruction.
     """
     _token = b'.'
@@ -201,7 +205,7 @@ class or_(immutable, matchable):
         return ' | '.join(map(_prepr, self.matchables))
 
 
-class not_(immutable):
+class not_(immutable, matchable):
     """Logical not of a matchable.
     """
     __slots__ = 'matchable',
@@ -229,7 +233,7 @@ class pattern(immutable):
     """
     __slots__ = 'matchable', 'startcodes', '_compiled'
 
-    def __init__(self, *matchables, startcodes=(1,)):
+    def __init__(self, *matchables, startcodes=(DEFAULT_STARTCODE,)):
         if not matchables:
             raise TypeError('expected at least one matchable')
         self.matchable = matchable = seq(*matchables)

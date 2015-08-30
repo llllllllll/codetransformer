@@ -6,7 +6,12 @@ from types import CodeType, FunctionType
 
 from .code import Code
 from .instructions import LOAD_CONST, STORE_FAST, LOAD_FAST
-from .patterns import boundpattern, patterndispatcher, NoMatches
+from .patterns import (
+    boundpattern,
+    patterndispatcher,
+    NoMatches,
+    DEFAULT_STARTCODE,
+)
 
 
 _cell_new = pythonapi.PyCell_New
@@ -196,7 +201,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
     @contextmanager
     def _new_context(self, code):
         self._code_stack.append(code)
-        self._startcode_stack.append(0)
+        self._startcode_stack.append(DEFAULT_STARTCODE)
         try:
             yield
         finally:
@@ -230,6 +235,8 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
             The startcode to begin.
         """
         try:
+            # "beginning" a new startcode changes the current startcode.
+            # Here we are mutating the current context's startcode.
             self._startcode_stack[-1] = startcode
         except IndexError:
             raise NoContext()
