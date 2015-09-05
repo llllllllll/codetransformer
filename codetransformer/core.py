@@ -78,7 +78,9 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
             The new constants.
         """
         return tuple(
-            self.transform(const) if isinstance(const, CodeType) else const
+            self.transform(Code.from_pycode(const)).to_pycode()
+            if isinstance(const, CodeType) else
+            const
             for const in consts
         )
 

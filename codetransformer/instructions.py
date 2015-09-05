@@ -78,8 +78,11 @@ class InstructionMeta(ABCMeta, matchable):
 
         opname_ = opname[opcode]
         dict_['opcode'] = immutableattr(opcode)
-        dict_['absjmp'] = immutableattr(opcode in hasjabs)
-        dict_['reljmp'] = immutableattr(opcode in hasjrel)
+        absjmp = opcode in hasjabs
+        reljmp = opcode in hasjrel
+        dict_['absjmp'] = immutableattr(absjmp)
+        dict_['reljmp'] = immutableattr(reljmp)
+        dict_['is_jmp'] = immutableattr(absjmp or reljmp)
         dict_['opname'] = immutableattr(opname_)
         dict_['uses_name'] = immutableattr(opname_ in _uses_name)
         dict_['uses_varname'] = immutableattr(opname_ in _uses_varname)

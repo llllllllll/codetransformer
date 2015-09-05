@@ -107,7 +107,7 @@ class modifier(meta):
 
 
 @instance
-class star(modifier):
+class var(modifier):
     """Modifier that matches zero or more of a pattern.
     """
     _token = b'*'
@@ -264,6 +264,9 @@ class boundpattern(immutable):
         )
 
     def __call__(self, compiled_instrs, instrs, startcode):
+        if startcode not in self._startcodes:
+            raise KeyError(compiled_instrs, startcode)
+
         match = self._compiled.match(compiled_instrs)
         if match is None or match.end is 0:
             raise KeyError(compiled_instrs, startcode)

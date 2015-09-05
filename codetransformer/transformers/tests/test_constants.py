@@ -1,7 +1,6 @@
 from types import CodeType
 
 from codetransformer.code import Code
-from codetransformer.instructions import LOAD_CONST, LOAD_NAME
 from ..constants import asconstants
 
 

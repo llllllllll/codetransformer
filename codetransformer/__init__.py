@@ -8,7 +8,7 @@ from . patterns import (
     pattern,
     plus,
     seq,
-    star,
+    var,
 )
 from . import instructions
 from . import transformers
@@ -27,6 +27,6 @@ __all__ = [
     'pattern',
     'plus',
     'seq',
-    'star',
+    'var',
     'transformers',
 ]

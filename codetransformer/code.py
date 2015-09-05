@@ -1,7 +1,7 @@
 from dis import Bytecode
 from enum import IntEnum, unique
 from functools import reduce
-import operator
+import operator as op
 from types import CodeType
 
 from .instructions import Instruction, LOAD_CONST
@@ -152,7 +152,7 @@ class Code:
 
         # Create the base flags for the function.
         flags = reduce(
-            operator.or_, (
+            op.or_, (
                 (nested and Flags.CO_NESTED),
                 (generator and Flags.CO_GENERATOR),
                 (coroutine and Flags.CO_COROUTINE),
@@ -191,8 +191,11 @@ class Code:
             flags |= Flags.CO_VARKEYWORDS
             append_argname(kwarg)
 
-        if not any(map(operator.attrgetter('uses_free'), instrs)):
+        if not any(map(op.attrgetter('uses_free'), instrs)):
             flags |= Flags.CO_NOFREE
+
+        for instr in filter(op.attrgetter('is_jmp'), instrs):
+            instr.arg._target_of.add(instr)
 
         self._instrs = instrs
         self._argnames = tuple(_argnames)
@@ -512,9 +515,9 @@ class Code:
         """The maximum amount of stack space used by this code object.
         """
         return max(scanl(
-            operator.add,
+            op.add,
             0,
-            map(operator.attrgetter('stack_effect'), self.instrs),
+            map(op.attrgetter('stack_effect'), self.instrs),
         ))
 
     def index(self, instr):

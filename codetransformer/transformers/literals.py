@@ -5,7 +5,10 @@ from textwrap import dedent
 
 from .. import instructions
 from ..core import CodeTransformer
-from ..patterns import pattern
+from ..patterns import pattern,  matchany, var
+
+
+IN_COMPREHENSION = 'in_comprehension'
 
 
 class overloaded_dicts(CodeTransformer):
@@ -45,20 +48,57 @@ class overloaded_dicts(CodeTransformer):
     """
     def __init__(self, astype):
         super().__init__()
-        self._astype = astype
+        self.astype = astype
+
+    @pattern(instructions.BUILD_MAP, matchany[var], instructions.MAP_ADD)
+    def _start_comprehension(self, instr, *instrs):
+        yield instructions.LOAD_CONST(self.astype).steal(instr)
+        # TOS  = self.astype
+
+        yield instructions.CALL_FUNCTION(0)
+        # TOS  = m = self.astype()
+
+        yield instructions.STORE_FAST('__map__')
+
+        *body, map_add = instrs
+        yield from body
+        # TOS  = k
+        # TOS1 = v
+
+        yield instructions.LOAD_FAST('__map__').steal(map_add)
+        # TOS  = __map__
+        # TOS1 = k
+        # TOS2 = v
+
+        yield instructions.ROT_TWO()
+        # TOS  = k
+        # TOS1 = __map__
+        # TOS2 = v
+
+        yield instructions.STORE_SUBSCR()
+        self.begin(IN_COMPREHENSION)
+
 
     @pattern(instructions.BUILD_MAP)
     def _build_map(self, instr):
-        yield instructions.LOAD_CONST(self._astype).steal(instr)
-        # TOS  = self._astype
+        yield instructions.LOAD_CONST(self.astype).steal(instr)
+        # TOS  = self.astype
 
         yield instructions.CALL_FUNCTION(0)
-        # TOS  = m = self._astype()
+        # TOS  = m = self.astype()
 
         yield from (instructions.DUP_TOP(),) * instr.arg
         # TOS  = m
         # ...
         # TOS[instr.arg] = m
+
+
+    @pattern(instructions.RETURN_VALUE, startcodes=(IN_COMPREHENSION,))
+    def _return_value(self, instr):
+        yield instructions.LOAD_FAST('__map__').steal(instr)
+        # TOS  = __map__
+
+        yield instr
 
     @pattern(instructions.STORE_MAP)
     def _store_map(self, instr):
