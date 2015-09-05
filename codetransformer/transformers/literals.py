@@ -6,6 +6,7 @@ from textwrap import dedent
 from .. import instructions
 from ..core import CodeTransformer
 from ..patterns import pattern,  matchany, var
+from ..utils.instance import instance
 
 
 IN_COMPREHENSION = 'in_comprehension'
@@ -326,10 +327,6 @@ def transform_consts(self, consts):
 
 overloaded_tuples.transform_consts = transform_consts
 del transform_consts
-
-
-def instance(cls):
-    return cls()
 
 
 @instance
