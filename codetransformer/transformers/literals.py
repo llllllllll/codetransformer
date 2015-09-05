@@ -148,9 +148,9 @@ def _format_constant_docstring(type_):
 
 class _ConstantTransformerBase(CodeTransformer):
 
-    def __init__(self, f):
+    def __init__(self, astype):
         super().__init__()
-        self.f = f
+        self.astype = astype
 
     def transform_consts(self, consts):
         # This is all one expression.
@@ -160,7 +160,7 @@ class _ConstantTransformerBase(CodeTransformer):
                 if isinstance(const, frozenset)
                 else self.transform_consts(const)
                 if isinstance(const, tuple)
-                else self.f(const)
+                else self.astype(const)
                 if isinstance(const, self._type)
                 else const
                 for const in consts
@@ -208,7 +208,7 @@ def _visit_build(self, instr):
     yield instr
     # TOS  = new_list
 
-    yield instructions.LOAD_CONST(self.f)
+    yield instructions.LOAD_CONST(self.astype)
     # TOS  = astype
     # TOS1 = new_list
 
@@ -260,7 +260,7 @@ def transform_consts(self, consts):
     consts = super(overloaded_sets, self).transform_consts(consts)
     return tuple(
         # Always pass a thawed set so mutations can happen inplace.
-        self.f(set(const)) if isinstance(const, frozenset) else const
+        self.astype(set(const)) if isinstance(const, frozenset) else const
         for const in consts
     )
 
@@ -276,7 +276,7 @@ overloaded_tuples = overloaded_build(instructions.BUILD_TUPLE, tuple)
 def transform_consts(self, consts):
     consts = super(overloaded_tuples, self).transform_consts(consts)
     return tuple(
-        self.f(const) if isinstance(const, tuple) else const
+        self.astype(const) if isinstance(const, tuple) else const
         for const in consts
     )
 
@@ -284,11 +284,11 @@ overloaded_tuples.transform_consts = transform_consts
 del transform_consts
 
 
-def singleton(cls):
+def instance(cls):
     return cls()
 
 
-@singleton
+@instance
 class islice_literals(CodeTransformer):
     """Transformer that turns slice indexing into an islice object.
 
