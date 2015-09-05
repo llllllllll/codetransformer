@@ -107,6 +107,12 @@ def test_overloaded_lists():
 
     assert frozen_in_set()
 
+    @overloaded_lists(tuple)
+    def frozen_comprehension():
+        return [a for a in (1, 2, 3)]
+
+    assert frozen_comprehension() == (1, 2, 3)
+
 
 def test_overloaded_strs():
 
@@ -143,6 +149,11 @@ def test_overloaded_sets():
         return 'd' in {'e'}
 
     assert containment_with_consts()
+
+    def frozen_comprehension():
+        return {a for a in 'abc'}
+
+    assert frozen_comprehension() == frozenset('abc')
 
 
 def test_overloaded_tuples():

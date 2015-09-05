@@ -78,7 +78,6 @@ class overloaded_dicts(CodeTransformer):
         yield instructions.STORE_SUBSCR()
         self.begin(IN_COMPREHENSION)
 
-
     @pattern(instructions.BUILD_MAP)
     def _build_map(self, instr):
         yield instructions.LOAD_CONST(self.astype).steal(instr)
@@ -91,7 +90,6 @@ class overloaded_dicts(CodeTransformer):
         # TOS  = m
         # ...
         # TOS[instr.arg] = m
-
 
     @pattern(instructions.RETURN_VALUE, startcodes=(IN_COMPREHENSION,))
     def _return_value(self, instr):
@@ -203,8 +201,30 @@ overloaded_floats = overloaded_constants(float)
 decimal_literals = overloaded_floats(Decimal)
 
 
+def _start_comprehension(self, *instrs):
+    yield from instrs
+    self.begin(IN_COMPREHENSION)
+
+
+def _return_value(self, instr):
+    # TOS  = collection
+
+    yield instructions.LOAD_CONST(self.astype).steal(instr)
+    # TOS  = self.astype
+    # TOS1 = collection
+
+    yield instructions.ROT_TWO()
+    # TOS  = collection
+    # TOS1 = self.astype
+
+    yield instructions.CALL_FUNCTION(1)
+    # TOS  = self.astype(collection)
+
+    yield instr
+
+
 # Added as a method for overloaded_build
-def _visit_build(self, instr):
+def _build(self, instr):
     yield instr
     # TOS  = new_list
 
@@ -220,7 +240,7 @@ def _visit_build(self, instr):
     # TOS  = astype(new_list)
 
 
-def overloaded_build(instruction, type_):
+def overloaded_build(type_, add_name=None):
     """Factory for constant transformers that apply to a given
     build instruction.
 
@@ -228,8 +248,8 @@ def overloaded_build(instruction, type_):
     ----------
     instruction : subclass of Instruction
         The type of instruction to overload.
-    type_ : type
-        The type of the object created by the build instruction.
+    add : callable
+        The callable that adds elements to this collection.
 
     Returns
     -------
@@ -237,22 +257,46 @@ def overloaded_build(instruction, type_):
         A new code transformer class that will overload the provided
         literal types.
     """
-    opname = instruction.opname
-    if not opname.startswith('BUILD_'):
-        raise TypeError('overload_build only works with BUILD_* instructions')
-
     typename = type_.__name__
+    dict_ = OrderedDict()
+
+    try:
+        build_instr = getattr(instructions, 'BUILD_' + typename.upper())
+    except AttributeError:
+        raise TypeError("type %s is not buildable" % typename)
+
+    if add_name is not None:
+        try:
+            add_instr = getattr(
+                instructions,
+                '_'.join((typename, add_name)).upper(),
+            )
+        except AttributeError:
+            TypeError("type %s is not addable" % typename)
+
+        dict_['_start_comprehension'] = pattern(
+            build_instr, matchany[var], add_instr,
+        )(_start_comprehension)
+        dict_['_return_value'] = pattern(
+            instructions.RETURN_VALUE, startcodes=(IN_COMPREHENSION,),
+        )(_return_value)
+    else:
+        add_instr = None
+
+    dict_['_build'] = pattern(build_instr)(_build)
+
     if not typename.endswith('s'):
         typename = typename + 's'
+
     return type(
         'overloaded_' + typename,
         (overloaded_constants(type_),),
-        {'_visit_build': pattern(instruction)(_visit_build)},
+        dict_,
     )
 
-overloaded_slices = overloaded_build(instructions.BUILD_SLICE, slice)
-overloaded_lists = overloaded_build(instructions.BUILD_LIST, list)
-overloaded_sets = overloaded_build(instructions.BUILD_SET, set)
+overloaded_slices = overloaded_build(slice)
+overloaded_lists = overloaded_build(list, 'append')
+overloaded_sets = overloaded_build(set, 'add')
 
 
 # Add a special method for set overloader.
@@ -269,7 +313,7 @@ del transform_consts
 frozenset_literals = overloaded_sets(frozenset)
 
 
-overloaded_tuples = overloaded_build(instructions.BUILD_TUPLE, tuple)
+overloaded_tuples = overloaded_build(tuple)
 
 
 # Add a special method for the tuple overloader.
