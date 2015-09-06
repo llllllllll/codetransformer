@@ -18,6 +18,15 @@ from ..literals import (
 )
 
 
+def test_overload_thing_with_thing_is_noop():
+    test_vals = [('a', 1), ('b', 2), ('c', 3)]
+    for t in dict, set, list, tuple:
+        expected = t(test_vals)
+        f = eval("lambda: %s" % expected)
+        overloaded = eval(t.__name__.join(['overloaded_', 's']))(t)(f)
+        assert f() == overloaded() == expected
+
+
 def test_overloaded_dicts():
 
     @overloaded_dicts(OrderedDict)
