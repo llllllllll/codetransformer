@@ -121,21 +121,6 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         self.arg = arg
         self._target_of = set()
 
-    def index(self, code):
-        """This instruction's index within a Code object.
-
-        Parameters
-        ----------
-        code : Code
-            The code object that this is in.
-
-        Returns
-        -------
-        index : int
-            The index of this instruction.
-        """
-        return code.index(self)
-
     def __repr__(self):
         arg = self.arg
         return '{op}{arg}'.format(
