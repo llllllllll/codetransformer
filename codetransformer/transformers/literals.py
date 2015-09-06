@@ -3,7 +3,13 @@ from decimal import Decimal
 from itertools import islice
 from textwrap import dedent
 
-from codetransformer import CodeTransformer, instructions
+from .. import instructions
+from ..core import CodeTransformer
+from ..patterns import pattern,  matchany, var
+from ..utils.instance import instance
+
+
+IN_COMPREHENSION = 'in_comprehension'
 
 
 class overloaded_dicts(CodeTransformer):
@@ -43,21 +49,58 @@ class overloaded_dicts(CodeTransformer):
     """
     def __init__(self, astype):
         super().__init__()
-        self._astype = astype
+        self.astype = astype
 
-    def visit_BUILD_MAP(self, instr):
-        yield self.LOAD_CONST(self._astype).steal(instr)
-        # TOS  = self._astype
+    @pattern(instructions.BUILD_MAP, matchany[var], instructions.MAP_ADD)
+    def _start_comprehension(self, instr, *instrs):
+        yield instructions.LOAD_CONST(self.astype).steal(instr)
+        # TOS  = self.astype
 
         yield instructions.CALL_FUNCTION(0)
-        # TOS  = m = self._astype()
+        # TOS  = m = self.astype()
+
+        yield instructions.STORE_FAST('__map__')
+
+        *body, map_add = instrs
+        yield from body
+        # TOS  = k
+        # TOS1 = v
+
+        yield instructions.LOAD_FAST('__map__').steal(map_add)
+        # TOS  = __map__
+        # TOS1 = k
+        # TOS2 = v
+
+        yield instructions.ROT_TWO()
+        # TOS  = k
+        # TOS1 = __map__
+        # TOS2 = v
+
+        yield instructions.STORE_SUBSCR()
+        self.begin(IN_COMPREHENSION)
+
+    @pattern(instructions.BUILD_MAP)
+    def _build_map(self, instr):
+        yield instructions.LOAD_CONST(self.astype).steal(instr)
+        # TOS  = self.astype
+
+        yield instructions.CALL_FUNCTION(0)
+        # TOS  = m = self.astype()
 
         yield from (instructions.DUP_TOP(),) * instr.arg
         # TOS  = m
         # ...
         # TOS[instr.arg] = m
 
-    def visit_STORE_MAP(self, instr):
+    @pattern(instructions.RETURN_VALUE, startcodes=(IN_COMPREHENSION,))
+    def _return_value(self, instr):
+        yield instructions.LOAD_FAST('__map__').steal(instr)
+        # TOS  = __map__
+
+        yield instr
+
+    @pattern(instructions.STORE_MAP)
+    def _store_map(self, instr):
         # TOS  = k
         # TOS1 = v
         # TOS2 = m
@@ -104,19 +147,19 @@ def _format_constant_docstring(type_):
 
 class _ConstantTransformerBase(CodeTransformer):
 
-    def __init__(self, f):
+    def __init__(self, astype):
         super().__init__()
-        self.f = f
+        self.astype = astype
 
-    def visit_consts(self, consts):
+    def transform_consts(self, consts):
         # This is all one expression.
-        return super().visit_consts(
+        return super().transform_consts(
             tuple(
-                frozenset(self.visit_consts(tuple(const)))
+                frozenset(self.transform_consts(tuple(const)))
                 if isinstance(const, frozenset)
-                else self.visit_consts(const)
+                else self.transform_consts(const)
                 if isinstance(const, tuple)
-                else self.f(const)
+                else self.astype(const)
                 if isinstance(const, self._type)
                 else const
                 for const in consts
@@ -159,12 +202,34 @@ overloaded_floats = overloaded_constants(float)
 decimal_literals = overloaded_floats(Decimal)
 
 
+def _start_comprehension(self, *instrs):
+    yield from instrs
+    self.begin(IN_COMPREHENSION)
+
+
+def _return_value(self, instr):
+    # TOS  = collection
+
+    yield instructions.LOAD_CONST(self.astype).steal(instr)
+    # TOS  = self.astype
+    # TOS1 = collection
+
+    yield instructions.ROT_TWO()
+    # TOS  = collection
+    # TOS1 = self.astype
+
+    yield instructions.CALL_FUNCTION(1)
+    # TOS  = self.astype(collection)
+
+    yield instr
+
+
 # Added as a method for overloaded_build
-def _visit_build(self, instr):
+def _build(self, instr):
     yield instr
     # TOS  = new_list
 
-    yield instructions.LOAD_CONST(self.f)
+    yield instructions.LOAD_CONST(self.astype)
     # TOS  = astype
     # TOS1 = new_list
 
@@ -176,16 +241,18 @@ def _visit_build(self, instr):
     # TOS  = astype(new_list)
 
 
-def overloaded_build(instruction, type_):
+def overloaded_build(type_, add_name=None):
     """Factory for constant transformers that apply to a given
     build instruction.
 
     Parameters
     ----------
-    instruction : subclass of Instruction
-        The type of instruction to overload.
     type_ : type
-        The type of the object created by the build instruction.
+        The object type to overload the construction of. This must be one of
+        "buildable" types, or types with a "BUILD_*" instruction.
+    add_name : str, optional
+        The suffix of the instruction tha adds elements to the collection.
+        For example: 'add' or 'append'
 
     Returns
     -------
@@ -193,58 +260,78 @@ def overloaded_build(instruction, type_):
         A new code transformer class that will overload the provided
         literal types.
     """
-    opname = instruction.opname
-    if not opname.startswith('BUILD_'):
-        raise TypeError('overload_build only works with BUILD_* instructions')
-
     typename = type_.__name__
+    dict_ = OrderedDict()
+
+    try:
+        build_instr = getattr(instructions, 'BUILD_' + typename.upper())
+    except AttributeError:
+        raise TypeError("type %s is not buildable" % typename)
+
+    if add_name is not None:
+        try:
+            add_instr = getattr(
+                instructions,
+                '_'.join((typename, add_name)).upper(),
+            )
+        except AttributeError:
+            TypeError("type %s is not addable" % typename)
+
+        dict_['_start_comprehension'] = pattern(
+            build_instr, matchany[var], add_instr,
+        )(_start_comprehension)
+        dict_['_return_value'] = pattern(
+            instructions.RETURN_VALUE, startcodes=(IN_COMPREHENSION,),
+        )(_return_value)
+    else:
+        add_instr = None
+
+    dict_['_build'] = pattern(build_instr)(_build)
+
     if not typename.endswith('s'):
         typename = typename + 's'
+
     return type(
         'overloaded_' + typename,
         (overloaded_constants(type_),),
-        {'visit_' + opname: _visit_build},
+        dict_,
     )
 
-overloaded_slices = overloaded_build(instructions.BUILD_SLICE, slice)
-overloaded_lists = overloaded_build(instructions.BUILD_LIST, list)
-overloaded_sets = overloaded_build(instructions.BUILD_SET, set)
+overloaded_slices = overloaded_build(slice)
+overloaded_lists = overloaded_build(list, 'append')
+overloaded_sets = overloaded_build(set, 'add')
 
 
 # Add a special method for set overloader.
-def visit_consts(self, consts):
-    consts = super(overloaded_sets, self).visit_consts(consts)
+def transform_consts(self, consts):
+    consts = super(overloaded_sets, self).transform_consts(consts)
     return tuple(
         # Always pass a thawed set so mutations can happen inplace.
-        self.f(set(const)) if isinstance(const, frozenset) else const
+        self.astype(set(const)) if isinstance(const, frozenset) else const
         for const in consts
     )
 
-overloaded_sets.visit_consts = visit_consts
-del visit_consts
+overloaded_sets.transform_consts = transform_consts
+del transform_consts
 frozenset_literals = overloaded_sets(frozenset)
 
 
-overloaded_tuples = overloaded_build(instructions.BUILD_TUPLE, tuple)
+overloaded_tuples = overloaded_build(tuple)
 
 
 # Add a special method for the tuple overloader.
-def visit_consts(self, consts):
-    consts = super(overloaded_tuples, self).visit_consts(consts)
+def transform_consts(self, consts):
+    consts = super(overloaded_tuples, self).transform_consts(consts)
     return tuple(
-        self.f(const) if isinstance(const, tuple) else const
+        self.astype(const) if isinstance(const, tuple) else const
         for const in consts
     )
 
-overloaded_tuples.visit_consts = visit_consts
-del visit_consts
+overloaded_tuples.transform_consts = transform_consts
+del transform_consts
 
 
-def singleton(cls):
-    return cls()
-
-
-@singleton
+@instance
 class islice_literals(CodeTransformer):
     """Transformer that turns slice indexing into an islice object.
 
@@ -260,7 +347,8 @@ class islice_literals(CodeTransformer):
     >>> tuple(f())
     ('1', '2')
     """
-    def visit_BINARY_SUBSCR(self, instr):
+    @pattern(instructions.BINARY_SUBSCR)
+    def _binary_subscr(self, instr):
         yield instructions.LOAD_CONST(self._islicer).steal(instr)
         # TOS  = self._islicer
         # TOS1 = k

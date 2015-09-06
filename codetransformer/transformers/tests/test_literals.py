@@ -1,11 +1,13 @@
 """
 Tests for literal transformers
 """
+from collections import OrderedDict
 from decimal import Decimal
 from itertools import islice
 
 from ..literals import (
     islice_literals,
+    overloaded_dicts,
     overloaded_bytes,
     overloaded_floats,
     overloaded_lists,
@@ -14,6 +16,21 @@ from ..literals import (
     overloaded_strs,
     overloaded_tuples,
 )
+
+
+def test_overloaded_dicts():
+
+    @overloaded_dicts(OrderedDict)
+    def literal():
+        return {'a': 1, 'b': 2, 'c': 3}
+
+    assert literal() == OrderedDict((('a', 1), ('b', 2), ('c', 3)))
+
+    @overloaded_dicts(OrderedDict)
+    def comprehension():
+        return {k: n for n, k in enumerate('abc', 1)}
+
+    assert comprehension() == OrderedDict((('a', 1), ('b', 2), ('c', 3)))
 
 
 def test_overloaded_bytes():
@@ -77,7 +94,6 @@ def test_overloaded_lists():
 
     assert frozen_list() == (1, 2, 3)
 
-
     @overloaded_lists(tuple)
     def frozen_in_tuple():
         return [1, 2, 3], [4, 5, 6]
@@ -90,6 +106,12 @@ def test_overloaded_lists():
         return [1, 2, 3] in {[1, 2, 3]}
 
     assert frozen_in_set()
+
+    @overloaded_lists(tuple)
+    def frozen_comprehension():
+        return [a for a in (1, 2, 3)]
+
+    assert frozen_comprehension() == (1, 2, 3)
 
 
 def test_overloaded_strs():
@@ -128,6 +150,11 @@ def test_overloaded_sets():
 
     assert containment_with_consts()
 
+    def frozen_comprehension():
+        return {a for a in 'abc'}
+
+    assert frozen_comprehension() == frozenset('abc')
+
 
 def test_overloaded_tuples():
 
@@ -152,7 +179,7 @@ def test_overloaded_slices():
     def concrete_slice(slice_):
         return tuple(range(slice_.start, slice_.stop))[::slice_.step]
 
-    class C(object):
+    class C:
         _idx = None
 
         def __getitem__(self, idx):

@@ -1,5 +1,10 @@
 from abc import ABCMeta, abstractmethod
 from dis import opname, opmap, hasjabs, hasjrel, HAVE_ARGUMENT, stack_effect
+from re import escape
+
+
+from .patterns import matchable
+from .utils.immutable import immutableattr
 
 
 __all__ = ['Instruction'] + list(opmap)
@@ -34,14 +39,6 @@ _uses_free = frozenset({
 })
 
 
-class _immutableattr(object):
-    def __init__(self, op):
-        self._op = op
-
-    def __get__(self, instance, owner):
-        return self._op
-
-
 def _notimplemented_property(name):
     @property
     @abstractmethod
@@ -51,7 +48,7 @@ def _notimplemented_property(name):
     return _
 
 
-class InstructionMeta(ABCMeta):
+class InstructionMeta(ABCMeta, matchable):
     _marker = object()  # sentinel
     _type_cache = {}
 
@@ -80,18 +77,28 @@ class InstructionMeta(ABCMeta):
             raise TypeError('Invalid opcode: {}'.format(opcode))
 
         opname_ = opname[opcode]
-        dict_['opcode'] = _immutableattr(opcode)
-        dict_['absjmp'] = _immutableattr(opcode in hasjabs)
-        dict_['reljmp'] = _immutableattr(opcode in hasjrel)
-        dict_['opname'] = _immutableattr(opname[opcode])
-        dict_['uses_name'] = _immutableattr(opname_ in _uses_name)
-        dict_['uses_varname'] = _immutableattr(opname_ in _uses_varname)
-        dict_['uses_free'] = _immutableattr(opname_ in _uses_free)
-        dict_['have_arg'] = _immutableattr(opcode >= HAVE_ARGUMENT)
+        dict_['opcode'] = immutableattr(opcode)
+        absjmp = opcode in hasjabs
+        reljmp = opcode in hasjrel
+        dict_['absjmp'] = immutableattr(absjmp)
+        dict_['reljmp'] = immutableattr(reljmp)
+        dict_['is_jmp'] = immutableattr(absjmp or reljmp)
+        dict_['opname'] = immutableattr(opname_)
+        dict_['uses_name'] = immutableattr(opname_ in _uses_name)
+        dict_['uses_varname'] = immutableattr(opname_ in _uses_varname)
+        dict_['uses_free'] = immutableattr(opname_ in _uses_free)
+        dict_['have_arg'] = immutableattr(opcode >= HAVE_ARGUMENT)
         cls = mcls._type_cache[opcode] = super().__new__(
             mcls, opname[opcode], bases, dict_,
         )
         return cls
+
+    def mcompile(self):
+        return escape(bytes((self.opcode,)))
+
+    def __repr__(self):
+        return self.opname
+    __str__ = __repr__
 
 
 class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
@@ -113,21 +120,6 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
             )
         self.arg = arg
         self._target_of = set()
-
-    def index(self, code):
-        """This instruction's index within a Code object.
-
-        Parameters
-        ----------
-        code : Code
-            The code object that this is in.
-
-        Returns
-        -------
-        index : int
-            The index of this instruction.
-        """
-        return code.index(self)
 
     def __repr__(self):
         arg = self.arg

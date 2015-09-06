@@ -1,7 +1,7 @@
 from dis import Bytecode
 from enum import IntEnum, unique
 from functools import reduce
-import operator
+import operator as op
 from types import CodeType
 
 from .instructions import Instruction, LOAD_CONST
@@ -64,7 +64,7 @@ def _sparse_args(instrs):
             yield None
 
 
-class Code(object):
+class Code:
     """A higher abstraction over python's CodeType.
 
     See Include/code.h for more information.
@@ -92,12 +92,15 @@ class Code(object):
         Is this code object a coroutine (async def)?
     iterable_coroutine : bool, optional
         Is this code object a coroutine iterator?
+    new_locals : bool, optional
+        Should this code object construct new locals?
 
     Attributes
     ----------
     argcount
     argnames
     cellvars
+    constructs_new_locals
     consts
     filename
     flags
@@ -142,19 +145,21 @@ class Code(object):
                  nested=False,
                  generator=False,
                  coroutine=False,
-                 iterable_coroutine=False):
+                 iterable_coroutine=False,
+                 new_locals=False):
 
         instrs = tuple(instrs)  # strictly evaluate any generators.
 
         # Create the base flags for the function.
         flags = reduce(
-            operator.or_, (
+            op.or_, (
                 (nested and Flags.CO_NESTED),
                 (generator and Flags.CO_GENERATOR),
                 (coroutine and Flags.CO_COROUTINE),
                 (iterable_coroutine and Flags.CO_ITERABLE_COROUTINE),
+                (new_locals and Flags.CO_NEWLOCALS)
             ),
-            Flags.CO_NEWLOCALS,
+            0,
         )
 
         # The starting varnames (the names of the arguments to the function)
@@ -186,8 +191,11 @@ class Code(object):
             flags |= Flags.CO_VARKEYWORDS
             append_argname(kwarg)
 
-        if not any(map(operator.attrgetter('uses_free'), instrs)):
+        if not any(map(op.attrgetter('uses_free'), instrs)):
             flags |= Flags.CO_NOFREE
+
+        for instr in filter(op.attrgetter('is_jmp'), instrs):
+            instr.arg._target_of.add(instr)
 
         self._instrs = instrs
         self._argnames = tuple(_argnames)
@@ -275,7 +283,8 @@ class Code(object):
             nested=flags & Flags.CO_NESTED,
             generator=flags & Flags.CO_GENERATOR,
             coroutine=flags & Flags.CO_COROUTINE,
-            iterable_coroutine=flags & Flags.CO_ITERABLE_COROUTINE
+            iterable_coroutine=flags & Flags.CO_ITERABLE_COROUTINE,
+            new_locals=flags & Flags.CO_NEWLOCALS,
         )
 
     def to_pycode(self):
@@ -458,11 +467,21 @@ class Code(object):
 
     @property
     def is_iterable_coroutine(self):
-        """Is this an async iterator defined with __anext__?
+        """Is this an async generator defined with types.coroutine?
 
         This is 3.5 and greater.
         """
         return bool(self._flags & Flags.CO_ITERABLE_COROUTINE)
+
+    @property
+    def constructs_new_locals(self):
+        """Does this code object construct new locals?
+
+        This is True for things like functions where executing the code
+        needs a new locals dict each time; however, something like a module
+        does not normally need new locals.
+        """
+        return bool(self._flags & Flags.CO_NEWLOCALS)
 
     @property
     def filename(self):
@@ -496,13 +515,10 @@ class Code(object):
         """The maximum amount of stack space used by this code object.
         """
         return max(scanl(
-            operator.add,
+            op.add,
             0,
-            map(operator.attrgetter('stack_effect'), self.instrs),
+            map(op.attrgetter('stack_effect'), self.instrs),
         ))
-
-    def __getitem__(self, key):
-        return self.instrs[key]
 
     def index(self, instr):
         """Returns the index of instr.
@@ -534,5 +550,14 @@ class Code(object):
         """
         return self.sparse_instrs.index(instr)
 
+    def __getitem__(self, key):
+        return self.instrs[key]
+
     def __iter__(self):
         return iter(self.instrs)
+
+    def __len__(self):
+        return len(self.instrs)
+
+    def __contains__(self, instr):
+        return instr in self.instrs
