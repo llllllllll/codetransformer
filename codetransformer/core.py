@@ -177,6 +177,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
                 freevars=self.transform_freevars(code.freevars),
                 name=name if name is not None else code.name,
                 filename=filename if filename is not None else code.filename,
+                firstlineno=code.firstlineno,
                 lnotab=lnotab if lnotab is not None else code.lnotab,
                 nested=code.is_nested,
                 generator=code.is_generator,
