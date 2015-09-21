@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
 import sys
 
 long_description = ''
@@ -28,4 +28,10 @@ setup(
         'Topic :: Software Development :: Pre-processors',
     ],
     url='https://github.com/llllllllll/codetransformer',
+    ext_modules=[
+        Extension(
+            "codetransformer.transformers._mutable_locals",
+            ['codetransformer/transformers/_mutable_locals.c'],
+        ),
+    ],
 )
