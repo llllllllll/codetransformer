@@ -64,6 +64,33 @@ def _sparse_args(instrs):
             yield None
 
 
+def _freevar_argname(arg, cellvars, freevars):
+    """
+    Get the name of the variable manipulated by a 'uses_free' instruction.
+
+    Parameters
+    ----------
+    arg : int
+        The raw argument to a uses_free instruction that we want to resolve to
+        a name.
+    cellvars : list[str]
+        The co_cellvars of the function for which we want to resolve `arg`.
+    freevars : list[str]
+        The co_freevars of the function for which we want to resolve `arg`.
+
+    Notes
+    -----
+    From https://docs.python.org/3.5/library/dis.html#opcode-LOAD_CLOSURE:
+
+        The name of the variable is co_cellvars[i] if i is less than the length
+        of co_cellvars. Otherwise it is co_freevars[i - len(co_cellvars)]
+    """
+    len_cellvars = len(cellvars)
+    if arg < len_cellvars:
+        return cellvars[arg]
+    return freevars[arg - len_cellvars]
+
+
 class Code:
     """A higher abstraction over python's CodeType.
 
@@ -246,6 +273,12 @@ class Code:
                 instr.arg = co.co_names[instr.arg]
             elif instr.uses_varname:
                 instr.arg = co.co_varnames[instr.arg]
+            elif instr.uses_free:
+                instr.arg = _freevar_argname(
+                    instr.arg,
+                    co.co_freevars,
+                    co.co_cellvars,
+                )
 
         flags = co.co_flags
         has_vargs = bool(flags & Flags.CO_VARARGS)
@@ -313,6 +346,19 @@ class Code:
             elif instr.uses_varname:
                 # Resolve the local variable index.
                 bc.extend(varnames.index(instr.arg).to_bytes(2, 'little'))
+            elif instr.uses_free:
+                # uses_free is really "uses freevars **or** cellvars".
+                try:
+                    # look for the name in cellvars
+                    bc.extend(cellvars.index(instr.arg).to_bytes(2, 'little'))
+                except ValueError:
+                    # fall back to freevars, incrementing the length of
+                    # cellvars.
+                    bc.extend(
+                        (freevars.index(instr.arg) + len(cellvars)).to_bytes(
+                            2, 'little'
+                        )
+                    )
             elif instr.absjmp:
                 # Resolve the absolute jump target.
                 bc.extend(
