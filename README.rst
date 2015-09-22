@@ -1,6 +1,8 @@
 ``codetransformer 0.6``
 =========================
 
+|build status|
+
 Bytecode transformers for CPython inspired by the ``ast`` module's
 ``NodeTransformer``.
 
@@ -230,3 +232,5 @@ literals into ``Decimal`` literals. For example:
 
 .. _lazy: https://github.com/llllllllll/lazy_python
 .. _opcode: https://docs.python.org/3.5/library/dis.html#opcode-NOP
+.. |build status| image:: https://travis-ci.org/llllllllll/codetransformer.svg?branch=master
+   :target: https://travis-ci.org/llllllllll/codetransformer
