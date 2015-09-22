@@ -8,6 +8,7 @@ if 'upload' in sys.argv:
     with open('README.rst') as f:
         long_description = f.read()
 
+
 setup(
     name='codetransformer',
     version='0.5.0',
@@ -28,4 +29,10 @@ setup(
         'Topic :: Software Development :: Pre-processors',
     ],
     url='https://github.com/llllllllll/codetransformer',
+    extras_require={
+        'dev': [
+            'flake8==2.4.0',
+            'pytest==2.7.1',
+        ],
+    },
 )

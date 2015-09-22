@@ -1,0 +1,12 @@
+language: python
+python:
+ - "3.4"
+
+install:
+ - pip install -e .[dev]
+
+before_script:
+ - flake8 codetransformer
+
+script:
+ - py.test codetransformer
