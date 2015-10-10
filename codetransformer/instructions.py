@@ -77,17 +77,21 @@ class InstructionMeta(ABCMeta, matchable):
             raise TypeError('Invalid opcode: {}'.format(opcode))
 
         opname_ = opname[opcode]
+        dict_['opname'] = immutableattr(opname_)
         dict_['opcode'] = immutableattr(opcode)
+
         absjmp = opcode in hasjabs
         reljmp = opcode in hasjrel
         dict_['absjmp'] = immutableattr(absjmp)
         dict_['reljmp'] = immutableattr(reljmp)
         dict_['is_jmp'] = immutableattr(absjmp or reljmp)
-        dict_['opname'] = immutableattr(opname_)
+
         dict_['uses_name'] = immutableattr(opname_ in _uses_name)
         dict_['uses_varname'] = immutableattr(opname_ in _uses_varname)
         dict_['uses_free'] = immutableattr(opname_ in _uses_free)
+
         dict_['have_arg'] = immutableattr(opcode >= HAVE_ARGUMENT)
+
         cls = mcls._type_cache[opcode] = super().__new__(
             mcls, opname[opcode], bases, dict_,
         )
