@@ -129,7 +129,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         arg = self.arg
         return '{op}{arg}'.format(
             op=self.opname,
-            arg='(' + str(arg) + ')' if self.arg is not self._no_arg else '',
+            arg='(' + repr(arg) + ')' if self.arg is not self._no_arg else '',
         )
 
     def steal(self, instr):
