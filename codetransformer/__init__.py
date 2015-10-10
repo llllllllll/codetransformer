@@ -12,10 +12,15 @@ from . patterns import (
 )
 from . import instructions
 from . import transformers
+from .utils.pretty import a, d, display, pprint_ast, pformat_ast
+
 
 __version__ = '0.6.0'
 
 __all__ = [
+    'a',
+    'd',
+    'display',
     'Code',
     'CodeTransformer',
     'instructions',
@@ -26,6 +31,8 @@ __all__ = [
     'pattern',
     'pattern',
     'plus',
+    'pformat_ast',
+    'pprint_ast',
     'seq',
     'var',
     'transformers',
