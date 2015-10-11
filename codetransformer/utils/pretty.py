@@ -135,7 +135,7 @@ def d(text, mode='exec', file=None):
 
 
 _DISPLAY_TEMPLATE = """\
-Body:
+Text:
 
 {text}
 ==============================
