@@ -10,26 +10,18 @@ from types import CodeType
 from codetransformer.code import Flags
 
 
-def pprint_ast(node, include_attributes=False, indent='  ', file=None):
-    """
-    Pretty-print an AST tree.
-    """
-    if file is None:
-        file = sys.stdout
-
-    print(
-        pformat_ast(
-            node,
-            include_attributes=False,
-            indent=indent
-        ),
-        file=file,
-    )
-
-
 def pformat_ast(node, include_attributes=False, indent='  '):
     """
     Pretty-format an AST tree element
+
+    Parameters
+    ----------
+    node : ast.AST
+       Top-level node to render.
+    include_attributes : bool, optional
+        Whether to include node attributes.  Default False.
+    indent : str, optional.
+        Indentation string for nested expressions.  Default is two spaces.
     """
     def _fmt(node, prefix, level):
 
@@ -44,10 +36,10 @@ def pformat_ast(node, include_attributes=False, indent='  '):
             yield with_prefix(
                 type(node).__name__,
                 '(id=',
-                node.id,
+                repr(node.id),
                 ', ctx=',
                 type(node.ctx).__name__,
-                '())',
+                '()),',
             )
 
         elif isinstance(node, Num):
@@ -55,7 +47,7 @@ def pformat_ast(node, include_attributes=False, indent='  '):
             # Render Num nodes on a single line without names.
             yield with_prefix(
                 type(node).__name__,
-                '(%d)' % node.n,
+                '(%d),' % node.n,
             )
 
         elif isinstance(node, AST):
@@ -75,6 +67,7 @@ def pformat_ast(node, include_attributes=False, indent='  '):
             yield with_prefix(type(node).__name__, '(')
             for name, value in fields_attrs:
                 yield from _fmt(value, name + '=', level + 1)
+            # Put a trailing comma if we're not at the top level.
             yield with_indent(')', ',' if level > 0 else '')
 
         elif isinstance(node, list):
@@ -98,6 +91,32 @@ def pformat_ast(node, include_attributes=False, indent='  '):
 def _extend_name(prev, parent_co):
     return prev + (
         '.<locals>.' if parent_co.co_flags & Flags.CO_NEWLOCALS else '.'
+    )
+
+
+def pprint_ast(node, include_attributes=False, indent='  ', file=None):
+    """
+    Pretty-print an AST tree.
+
+    Parameters
+    ----------
+    node : ast.AST
+       Top-level node to render.
+    include_attributes : bool, optional
+        Whether to include node attributes.  Default False.
+    indent : str, optional.
+        Indentation string for nested expressions.  Default is two spaces.
+    """
+    if file is None:
+        file = sys.stdout
+
+    print(
+        pformat_ast(
+            node,
+            include_attributes=include_attributes,
+            indent=indent
+        ),
+        file=file,
     )
 
 

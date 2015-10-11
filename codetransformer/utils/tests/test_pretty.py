@@ -9,7 +9,8 @@ def test_a(capsys):
     text = dedent(
         """
         def inc(a):
-            return a + 1
+            b = a + 1
+            return b
         """
     )
     expected = dedent(
@@ -32,12 +33,18 @@ def test_a(capsys):
                 defaults=[],
               ),
               body=[
-                Return(
+                Assign(
+                  targets=[
+                    Name(id='b', ctx=Store()),
+                  ],
                   value=BinOp(
-                    left=Name(id=a, ctx=Load())
+                    left=Name(id='a', ctx=Load()),
                     op=Add(),
-                    right=Num(1)
+                    right=Num(1),
                   ),
+                ),
+                Return(
+                  value=Name(id='b', ctx=Load()),
                 ),
               ],
               decorator_list=[],
@@ -49,8 +56,9 @@ def test_a(capsys):
     )
 
     a(text)
-    printed, _ = capsys.readouterr()
-    assert printed == expected
+    stdout, stderr = capsys.readouterr()
+    assert stdout == expected
+    assert stderr == ''
 
     file_ = StringIO()
     a(text, file=file_)
