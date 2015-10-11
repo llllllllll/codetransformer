@@ -124,6 +124,20 @@ def iter_attributes(node):
 def a(text, mode='exec', indent='  ', file=None):
     """
     Interactive convenience for displaying the AST of a code string.
+
+    Writes a pretty-formatted AST-tree to `file`.
+
+    Parameters
+    ----------
+    text : str
+        Text of Python code to render as AST.
+    mode : {'exec', 'eval'}, optional
+        Mode for `ast.parse`.  Default is 'exec'.
+    indent : str, optional
+        String to use for indenting nested expressions.  Default is two spaces.
+    file : None or file-like object, optional
+        File to use to print output.  If the default of `None` is passed, we
+        use sys.stdout.
     """
     pprint_ast(parse(text, mode=mode), indent=indent, file=file)
 
@@ -131,6 +145,19 @@ def a(text, mode='exec', indent='  ', file=None):
 def d(text, mode='exec', file=None):
     """
     Interactive convenience for displaying the disassembly of a code string.
+
+    Compiles `text` and recursively traverses the result looking for `code`
+    objects to render with `dis.dis`.
+
+    Parameters
+    ----------
+    text : str
+        Text of Python code to compile and disassemble.
+    mode : {'exec', 'eval'}, optional
+        Mode for `compile`.  Default is 'exec'.
+    file : None or file-like object, optional
+        File to use to print output.  If the default of `None` is passed, we
+        use sys.stdout.
     """
     if file is None:
         file = sys.stdout
@@ -166,7 +193,18 @@ Disassembly
 def display(text, mode='exec', file=None):
     """
     Show `text`, rendered as AST and as Bytecode.
+
+    Parameters
+    ----------
+    text : str
+        Text of Python code to render.
+    mode : {'exec', 'eval'}, optional
+        Mode for `ast.parse` and `compile`.  Default is 'exec'.
+    file : None or file-like object, optional
+        File to use to print output.  If the default of `None` is passed, we
+        use sys.stdout.
     """
+
     if file is None:
         file = sys.stdout
 
