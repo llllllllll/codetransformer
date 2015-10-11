@@ -63,14 +63,13 @@ def test_a(capsys):
 def test_walk_code():
     module = dedent(
         """\
-        def foo():
-            def bar():
+        class Foo:
+            def bar(self):
                 def buzz():
                     pass
                 def bazz():
                     pass
                 return buzz
-            return bar
         """
     )
 
@@ -86,10 +85,10 @@ def test_walk_code():
     result = list(walk_code(co))
     expected = [
         ('<module>', co),
-        ('<module>.foo', foo),
-        ('<module>.foo.bar', bar),
-        ('<module>.foo.bar.buzz', buzz),
-        ('<module>.foo.bar.bazz', bazz),
+        ('<module>.Foo', foo),
+        ('<module>.Foo.bar', bar),
+        ('<module>.Foo.bar.<locals>.buzz', buzz),
+        ('<module>.Foo.bar.<locals>.bazz', bazz),
     ]
 
     assert result == expected

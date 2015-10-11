@@ -7,6 +7,8 @@ from operator import attrgetter
 import sys
 from types import CodeType
 
+from codetransformer.code import Flags
+
 
 def pprint_ast(node, include_attributes=False, indent='  ', file=None):
     """
@@ -93,6 +95,12 @@ def pformat_ast(node, include_attributes=False, indent='  '):
     return '\n'.join(_fmt(node, prefix='', level=0))
 
 
+def _extend_name(prev, parent_co):
+    return prev + (
+        '.<locals>.' if parent_co.co_flags & Flags.CO_NEWLOCALS else '.'
+    )
+
+
 def walk_code(co, _prefix=''):
     """
     Traverse a code object, finding all consts which are also code objects.
@@ -102,10 +110,9 @@ def walk_code(co, _prefix=''):
     name = _prefix + co.co_name
     yield name, co
     yield from chain.from_iterable(
-        map(
-            partial(walk_code, _prefix=name + '.'),
-            (c for c in co.co_consts if isinstance(c, CodeType))
-        )
+        walk_code(c, _prefix=_extend_name(name, co))
+        for c in co.co_consts
+        if isinstance(c, CodeType)
     )
 
 
@@ -132,18 +139,25 @@ def d(text, mode='exec', file=None):
         print(name, file=file)
         print('-' * len(name), file=file)
         dis.dis(co, file=file)
+        print('', file=file)
 
 
 _DISPLAY_TEMPLATE = """\
-Text:
+====
+Text
+====
 
 {text}
-==============================
-AST:
+
+====================
+Abstract Syntax Tree
+====================
 
 {ast}
-==============================
-Code Objects:
+
+===========
+Disassembly
+===========
 
 {code}
 """
