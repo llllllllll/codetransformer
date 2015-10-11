@@ -10,7 +10,13 @@ from types import CodeType
 from codetransformer.code import Flags
 
 
-def pformat_ast(node, include_attributes=False, indent='  '):
+INCLUDE_ATTRIBUTES_DEFAULT = False
+INDENT_DEFAULT = '  '
+
+
+def pformat_ast(node,
+                include_attributes=INCLUDE_ATTRIBUTES_DEFAULT,
+                indent=INDENT_DEFAULT):
     """
     Pretty-format an AST tree element
 
@@ -94,7 +100,10 @@ def _extend_name(prev, parent_co):
     )
 
 
-def pprint_ast(node, include_attributes=False, indent='  ', file=None):
+def pprint_ast(node,
+               include_attributes=INCLUDE_ATTRIBUTES_DEFAULT,
+               indent=INDENT_DEFAULT,
+               file=None):
     """
     Pretty-print an AST tree.
 
@@ -106,6 +115,9 @@ def pprint_ast(node, include_attributes=False, indent='  ', file=None):
         Whether to include node attributes.  Default False.
     indent : str, optional.
         Indentation string for nested expressions.  Default is two spaces.
+    file : None or file-like object, optional
+        File to use to print output.  If the default of `None` is passed, we
+        use sys.stdout.
     """
     if file is None:
         file = sys.stdout
