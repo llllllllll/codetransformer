@@ -5,6 +5,7 @@ from re import escape
 
 from .patterns import matchable
 from .utils.immutable import immutableattr
+from .utils.no_default import no_default
 
 
 __all__ = ['Instruction'] + list(opmap)
@@ -115,7 +116,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         the argument, for example, if this is a ``LOAD_CONST``, use the
         constant value, not the index that would appear in the bytecode.
     """
-    _no_arg = object()
+    _no_arg = no_default
 
     def __init__(self, arg=_no_arg):
         if self.have_arg and arg is self._no_arg:
@@ -197,24 +198,53 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         )
 
 
-@classmethod
-def from_argcounts(cls, positional=0, keyword=0):
-    return cls(
-        int.from_bytes(
-            positional.to_bytes(1, 'little') + keyword.to_bytes(1, 'little'),
-            'little',
-        ),
+def _mk_call_init(class_):
+    """Create an __init__ function for a call type instruction.
+
+    Parameters
+    ----------
+    class_ : type
+        The type to bind the function to.
+
+    Returns
+    -------
+    __init__ : callable
+        The __init__ method for the class.
+    """
+    def __init__(self, packed=no_default, *, positional=0, keyword=0):
+        if packed is no_default:
+            arg = int.from_bytes(bytes((positional, keyword)), 'little')
+        elif not positional and not keyword:
+            arg = packed
+        else:
+            raise TypeError('cannot specify packed and unpacked arguments')
+        super(class_, self).__init__(arg)
+
+    return __init__
+
+
+def _call_repr(self):
+    positional, keyword = self.arg.to_bytes(2, 'little')
+    return '%s(positional=%d, keyword=%d)' % (
+        type(self).__name__,
+        positional,
+        keyword,
     )
 
 
 globals_ = globals()
 for name, opcode in opmap.items():
-    ns = {}
-    # Catch all the different function call kinds.
-    if name.startswith('CALL_FUNCTION'):
-        ns['from_argcounts'] = from_argcounts
-    globals_[name] = InstructionMeta(
-        opname[opcode], (Instruction,), ns, opcode=opcode,
+    globals_[name] = class_ = InstructionMeta(
+        opname[opcode], (Instruction,), {}, opcode=opcode,
     )
+    if name.startswith('CALL_FUNCTION'):
+        class_.__init__ = _mk_call_init(class_)
+        class_.__repr__ = _call_repr
+    del class_
+
+
+# Clean up the namespace
 del name
 del globals_
+del _call_repr
+del _mk_call_init
