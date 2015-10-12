@@ -53,7 +53,7 @@ def pformat_ast(node,
             # Render Num nodes on a single line without names.
             yield with_prefix(
                 type(node).__name__,
-                '(%d),' % node.n,
+                '(%r),' % node.n,
             )
 
         elif isinstance(node, AST):
