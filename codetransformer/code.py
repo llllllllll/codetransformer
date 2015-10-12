@@ -23,8 +23,9 @@ class Flags(IntEnum):
     # call frame it setup.
     CO_NOFREE = 0x0040
 
-    # The CO_COROUTINE flag is set for coroutine functions
-    # (defined with ``async def`` keywords)
+    # The CO_COROUTINE flag is set for coroutines creates with the
+    # types.coroutine decorator. This converts old-style coroutines into
+    # python3.5 style coroutines.
     CO_COROUTINE = 0x0080
     CO_ITERABLE_COROUTINE = 0x0100
 
