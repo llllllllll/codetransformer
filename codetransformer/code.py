@@ -1,4 +1,4 @@
-from dis import Bytecode
+from dis import Bytecode, dis
 from enum import IntEnum, unique
 from functools import reduce
 import operator as op
@@ -608,3 +608,6 @@ class Code:
 
     def __contains__(self, instr):
         return instr in self.instrs
+
+    def dis(self, file=None):
+        dis(self.to_pycode(), file=file)
