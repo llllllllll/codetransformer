@@ -149,7 +149,10 @@ def walk_code(co, _prefix=''):
 
 def iter_attributes(node):
     attrs = node._attributes
-    yield from zip(attrs, attrgetter(attrs)(node))
+    if not attrs:
+        return
+
+    yield from zip(attrs, attrgetter(*attrs)(node))
 
 
 def a(text, mode='exec', indent='  ', file=None):
