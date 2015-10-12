@@ -1,4 +1,4 @@
-from dis import Bytecode, dis
+from dis import Bytecode, dis, findlinestarts
 from enum import IntEnum, unique
 from functools import reduce
 import operator as op
@@ -109,9 +109,8 @@ class Code:
         The file that this code object came from.
     firstlineno : int, optional
         The first line number of the code in this code object.
-    lnotab : bytes, optional
-        Bytes (encoding addr<->lineno mapping).
-        See Objects/lnotab_notes.txt for details.
+    lnotab : dict[Instruction -> int], optional
+        The mapping from instruction to the line that it starts.
     nested : bool, optional
         Is this code object nested in another code object?
     generator : bool, optional
@@ -142,6 +141,7 @@ class Code:
     lnotab
     name
     names
+    py_lnotab
     sparse_instrs
     stacksize
     varnames
@@ -169,7 +169,7 @@ class Code:
                  name='<code>',
                  filename='<code>',
                  firstlineno=1,
-                 lnotab=b'',
+                 lnotab=None,
                  nested=False,
                  generator=False,
                  coroutine=False,
@@ -234,7 +234,7 @@ class Code:
         self._name = name
         self._filename = filename
         self._firstlineno = firstlineno
-        self._lnotab = lnotab
+        self._lnotab = lnotab or {}
         self._flags = flags
 
     @classmethod
@@ -252,7 +252,7 @@ class Code:
             The codetransformer Code object.
         """
         # Make it sparse to instrs[n] is the instruction at bytecode[n]
-        instrs = tuple(
+        sparse_instrs = tuple(
             _sparse_args(
                 Instruction.from_opcode(
                     b.opcode,
@@ -260,14 +260,14 @@ class Code:
                 ) for b in Bytecode(co)
             ),
         )
-        for idx, instr in enumerate(instrs):
+        for idx, instr in enumerate(sparse_instrs):
             if instr is None:
                 # The sparse value
                 continue
             if instr.absjmp:
-                instr.arg = instrs[instr.arg]
+                instr.arg = sparse_instrs[instr.arg]
             elif instr.reljmp:
-                instr.arg = instrs[instr.arg + idx + 3]
+                instr.arg = sparse_instrs[instr.arg + idx + 3]
             elif isinstance(instr, LOAD_CONST):
                 instr.arg = co.co_consts[instr.arg]
             elif instr.uses_name:
@@ -306,14 +306,16 @@ class Code:
             new_paramnames.append('**' + paramnames[-1])
 
         return cls(
-            filter(bool, instrs),
+            filter(bool, sparse_instrs),
             argnames=new_paramnames,
             cellvars=co.co_cellvars,
             freevars=co.co_freevars,
             name=co.co_name,
             filename=co.co_filename,
             firstlineno=co.co_firstlineno,
-            lnotab=co.co_lnotab,
+            lnotab={
+                sparse_instrs[off]: lno for off, lno in findlinestarts(co)
+            },
             nested=flags & Flags.CO_NESTED,
             generator=flags & Flags.CO_GENERATOR,
             coroutine=flags & Flags.CO_COROUTINE,
@@ -392,7 +394,7 @@ class Code:
             self.filename,
             self.name,
             self.firstlineno,
-            self.lnotab,
+            self.py_lnotab,
             freevars,
             cellvars,
         )
@@ -551,11 +553,35 @@ class Code:
 
     @property
     def lnotab(self):
-        """The encoding of address to lineno mapping.
-
-        See Objects/lnotab_notes.txt for details.
+        """The mapping of instructions to the line that they start.
         """
         return self._lnotab
+
+    @property
+    def py_lnotab(self):
+        """The encoded lnotab that python uses to compute when lines start.
+
+        Note
+        ----
+        See Objects/lnotab_notes.txt in the cpython source for more details.
+        """
+        lnotab = self.lnotab
+        py_lnotab = bytearray(len(lnotab) * 2)
+        idx = 0
+        last_instr = 0
+        last_lno = self.firstlineno
+        for addr, instr in enumerate(_sparse_args(self.instrs)):
+            lno = lnotab.get(instr)
+            if lno is None:
+                continue
+
+            py_lnotab[idx] = addr - last_instr
+            last_instr = addr
+            idx += 1
+            py_lnotab[idx] = lno - last_lno
+            last_lno = lno
+            idx += 1
+        return bytes(py_lnotab)
 
     @property
     def stacksize(self):
