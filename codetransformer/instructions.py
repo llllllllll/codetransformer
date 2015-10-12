@@ -49,6 +49,17 @@ def _notimplemented_property(name):
     return _
 
 
+@property
+def _vartype(self):
+    try:
+        return self._vartype
+    except AttributeError:
+        raise AttributeError(
+            "vartype is not available on instructions "
+            "constructed outside of a Code object."
+        )
+
+
 class InstructionMeta(ABCMeta, matchable):
     _marker = object()  # sentinel
     _type_cache = {}
@@ -90,6 +101,8 @@ class InstructionMeta(ABCMeta, matchable):
         dict_['uses_name'] = immutableattr(opname_ in _uses_name)
         dict_['uses_varname'] = immutableattr(opname_ in _uses_varname)
         dict_['uses_free'] = immutableattr(opname_ in _uses_free)
+        if opname_ in _uses_free:
+            dict_['vartype'] = _vartype
 
         dict_['have_arg'] = immutableattr(opcode >= HAVE_ARGUMENT)
 
@@ -218,17 +231,17 @@ def _mk_call_init(class_):
             arg = packed
         else:
             raise TypeError('cannot specify packed and unpacked arguments')
+        self.positional, self.keyword = arg.to_bytes(2, 'little')
         super(class_, self).__init__(arg)
 
     return __init__
 
 
 def _call_repr(self):
-    positional, keyword = self.arg.to_bytes(2, 'little')
     return '%s(positional=%d, keyword=%d)' % (
         type(self).__name__,
-        positional,
-        keyword,
+        self.positional,
+        self.keyword,
     )
 
 
@@ -240,6 +253,7 @@ for name, opcode in opmap.items():
     if name.startswith('CALL_FUNCTION'):
         class_.__init__ = _mk_call_init(class_)
         class_.__repr__ = _call_repr
+
     del class_
 
 

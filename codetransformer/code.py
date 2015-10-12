@@ -224,6 +224,18 @@ class Code:
         if not any(map(op.attrgetter('uses_free'), instrs)):
             flags |= Flags.CO_NOFREE
 
+        cellvar_names = set(cellvars)
+        freevar_names = set(freevars)
+        for instr in filter(op.attrgetter('uses_free'), instrs):
+            if instr.arg in cellvar_names:
+                instr._vartype = 'cell'
+            elif instr.arg in freevar_names:
+                instr._vartype = 'free'
+            else:
+                raise ValueError(
+                    "Argument to %r is not in cellvars or freevars." % instr
+                )
+
         for instr in filter(op.attrgetter('is_jmp'), instrs):
             instr.arg._target_of.add(instr)
 

@@ -29,6 +29,7 @@ setup(
         'Topic :: Software Development :: Pre-processors',
     ],
     url='https://github.com/llllllllll/codetransformer',
+    install_requires=['toolz'],
     extras_require={
         'dev': [
             'flake8==2.4.0',

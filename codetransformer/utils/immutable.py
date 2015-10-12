@@ -1,3 +1,4 @@
+from collections import ChainMap
 from itertools import starmap
 from weakref import WeakKeyDictionary
 
@@ -242,3 +243,9 @@ class immutable(metaclass=ImmutableMeta):
     """A base class for immutable objects.
     """
     __slots__ = ()
+
+    def to_dict(self):
+        return {s: getattr(self, s) for s in self.__slots__}
+
+    def update(self, **updates):
+        return type(self)(**ChainMap(updates, self.to_dict()))
