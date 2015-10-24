@@ -41,7 +41,7 @@ class overloaded_dicts(CodeTransformer):
     >>> from collections import OrderedDict
     >>> ordereddict_literals = overloaded_dicts(OrderedDict)
     >>> @ordereddict_literals
-    >>> def f():
+    ... def f():
     ...     return {'a': 1, 'b': 2, 'c': 3}
     ...
     >>> f()

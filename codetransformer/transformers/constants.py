@@ -15,7 +15,7 @@ class asconstants(CodeTransformer):
 
     >>> from codetransformer.transformers import asconstants
     >>> @asconstants(a=1)
-    >>> def f():
+    ... def f():
     ...     return a
     ...
     >>> f()
