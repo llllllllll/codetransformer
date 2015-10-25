@@ -20,7 +20,7 @@ def scanl(f, n, ns):
     Examples
     --------
     >>> import operator as op
-    >>> tuple(scanl(op.add, 0, (1, 2, 3, 4))
+    >>> tuple(scanl(op.add, 0, (1, 2, 3, 4)))
     (0, 1, 3, 6, 10)
     """
     yield n
