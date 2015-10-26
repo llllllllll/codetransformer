@@ -70,3 +70,27 @@ def reverse_dict(d):
     True
     """
     return {v: k for k, v in d.items()}
+
+
+def ffill(iterable):
+    """Forward fill non None values in some iterable.
+
+    Parameters
+    ----------
+    iterable : iterable
+        The iterable to forward fill.
+
+    Yields
+    ------
+    e : any
+        The last non None value or None if there has not been a non None value.
+    """
+    it = iter(iterable)
+    previous = next(it)
+    yield previous
+    for e in it:
+        if e is None:
+            yield previous
+        else:
+            previous = e
+            yield e
