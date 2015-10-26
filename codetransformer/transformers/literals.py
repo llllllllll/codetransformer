@@ -181,7 +181,7 @@ def overloaded_constants(type_):
         A new code transformer class that will overload the provided
         literal types.
     """
-    typename = type.__name__
+    typename = type_.__name__
     if not typename.endswith('s'):
         typename += 's'
 
