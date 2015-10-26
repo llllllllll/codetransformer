@@ -5,7 +5,7 @@ import operator as op
 from types import CodeType
 
 from .instructions import Instruction, LOAD_CONST
-from .utils.functional import scanl
+from .utils.functional import scanl, reverse_dict
 
 
 @unique
@@ -314,7 +314,7 @@ class Code:
             filename=co.co_filename,
             firstlineno=co.co_firstlineno,
             lnotab={
-                sparse_instrs[off]: lno for off, lno in findlinestarts(co)
+                lno: sparse_instrs[off] for off, lno in findlinestarts(co)
             },
             nested=flags & Flags.CO_NESTED,
             generator=flags & Flags.CO_GENERATOR,
@@ -565,21 +565,21 @@ class Code:
         ----
         See Objects/lnotab_notes.txt in the cpython source for more details.
         """
-        lnotab = self.lnotab
-        py_lnotab = bytearray(len(lnotab) * 2)
+        reverse_lnotab = reverse_dict(self.lnotab)
+        py_lnotab = bytearray(len(reverse_lnotab) * 2)
         idx = 0
-        last_instr = 0
-        last_lno = self.firstlineno
+        prev_instr = 0
+        prev_lno = self.firstlineno
         for addr, instr in enumerate(_sparse_args(self.instrs)):
-            lno = lnotab.get(instr)
+            lno = reverse_lnotab.get(instr)
             if lno is None:
                 continue
 
-            py_lnotab[idx] = addr - last_instr
-            last_instr = addr
+            py_lnotab[idx] = addr - prev_instr
+            prev_instr = addr
             idx += 1
-            py_lnotab[idx] = lno - last_lno
-            last_lno = lno
+            py_lnotab[idx] = lno - prev_lno
+            prev_lno = lno
             idx += 1
         return bytes(py_lnotab)
 

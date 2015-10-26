@@ -47,3 +47,26 @@ def flip(f, a, b):
         f(b, a)
     """
     return f(b, a)
+
+
+def reverse_dict(d):
+    """Reverse a dictionary, replacing the keys and values.
+
+    Parameters
+    ----------
+    d : dict
+        The dict to reverse.
+
+    Returns
+    -------
+    rd : dict
+        The dict with the keys and values flipped.
+
+    Examples
+    --------
+    >>> d = {'a': 1, 'b': 2, 'c': 3}
+    >>> e = reverse_dict(d)
+    >>> e == {1: 'a', 2: 'b', 3: 'c'}
+    True
+    """
+    return {v: k for k, v in d.items()}
