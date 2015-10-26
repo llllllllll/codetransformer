@@ -2,11 +2,48 @@ import builtins
 
 from ..core import CodeTransformer
 from ..instructions import (
+    DELETE_DEREF,
+    DELETE_FAST,
+    DELETE_GLOBAL,
+    DELETE_NAME,
+    LOAD_CLASSDEREF,
     LOAD_CONST,
-    LOAD_NAME,
+    LOAD_DEREF,
+    LOAD_FAST,
     LOAD_GLOBAL,
+    LOAD_NAME,
+    STORE_DEREF,
+    STORE_FAST,
+    STORE_GLOBAL,
+    STORE_NAME,
 )
 from ..patterns import pattern
+
+
+def _assign_or_del(type_):
+    assert type_ in ('assign to', 'delete')
+
+    def handler(self, instr):
+        name = instr.arg
+        if name not in self._constnames:
+            yield instr
+            return
+
+        code = self.code
+        filename = code.filename
+        lno = code.lno_of_instr[instr]
+        try:
+            with open(filename) as f:
+                line = f.readlines()[lno - 1]
+        except IOError:
+            line = '???'
+
+        raise SyntaxError(
+            "can't %s constant name %r" % (type_, name),
+            (filename, lno, len(line), line),
+        )
+
+    return handler
 
 
 class asconstants(CodeTransformer):
@@ -38,7 +75,17 @@ class asconstants(CodeTransformer):
                 raise TypeError('Duplicate keys: {!r}'.format(overlap))
             constnames.update(kwargs)
 
-    @pattern(LOAD_NAME | LOAD_GLOBAL)
+    def transform(self, code, **kwargs):
+        overlap = self._constnames.keys() & set(code.argnames)
+        if overlap:
+            raise SyntaxError(
+                'argument names overlap with constant names: %r' % overlap,
+            )
+        return super().transform(code, **kwargs)
+
+    @pattern(
+        LOAD_NAME | LOAD_GLOBAL | LOAD_DEREF | LOAD_CLASSDEREF | LOAD_FAST,
+    )
     def _load_name(self, instr):
         name = instr.arg
         if name not in self._constnames:
@@ -46,3 +93,10 @@ class asconstants(CodeTransformer):
             return
 
         yield LOAD_CONST(self._constnames[name]).steal(instr)
+
+    _store = pattern(
+        STORE_NAME | STORE_GLOBAL | STORE_DEREF | STORE_FAST,
+    )(_assign_or_del('assign to'))
+    _delete = pattern(
+        DELETE_NAME | DELETE_GLOBAL | DELETE_DEREF | DELETE_FAST,
+    )(_assign_or_del('delete'))

@@ -5,7 +5,8 @@ import operator as op
 from types import CodeType
 
 from .instructions import Instruction, LOAD_CONST
-from .utils.functional import scanl, reverse_dict
+from .utils.functional import scanl, reverse_dict, ffill
+from .utils.immutable import lazyval
 
 
 @unique
@@ -158,6 +159,7 @@ class Code:
         '_firstlineno',
         '_lnotab',
         '_flags',
+        '__weakref__',
     )
 
     def __init__(self,
@@ -553,9 +555,19 @@ class Code:
 
     @property
     def lnotab(self):
-        """The mapping of instructions to the line that they start.
+        """The mapping of line number to the first instruction on that line.
         """
         return self._lnotab
+
+    @lazyval
+    def lno_of_instr(self):
+        instrs = self.instrs
+        lnos = [None] * len(instrs)
+        reverse_lnotab = reverse_dict(self.lnotab)
+        for n, instr in enumerate(instrs):
+            lnos[n] = reverse_lnotab.get(instr)
+        return dict(zip(instrs, ffill(lnos)))
+
 
     @property
     def py_lnotab(self):

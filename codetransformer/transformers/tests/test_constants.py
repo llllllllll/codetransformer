@@ -1,4 +1,8 @@
+import re
+from sys import _getframe
 from types import CodeType
+
+import pytest
 
 from codetransformer.code import Code
 from ..constants import asconstants
@@ -27,3 +31,51 @@ def test_name():
     ns = {}
     exec(code.to_pycode(), ns)
     assert ns['b'] == 1
+
+
+def test_closure():
+    def f():
+        a = 2
+
+        @asconstants(a=1)
+        def g():
+            return a
+
+        return g
+
+    assert f()() == 1
+
+
+def test_store():
+    with pytest.raises(SyntaxError) as e:
+        @asconstants(a=1)
+        def f():
+            a = 1  # noqa
+
+    line = _getframe().f_lineno - 2
+    assert (
+        str(e.value) ==
+        "can't assign to constant name 'a' (%s line %d)" % (__file__, line),
+    )
+
+
+def test_delete():
+    with pytest.raises(SyntaxError) as e:
+        @asconstants(a=1)
+        def f():
+            del a  # noqa
+
+    line = _getframe().f_lineno - 2
+    assert (
+        str(e.value) ==
+        "can't delete constant name 'a' (%s line %d)" % (__file__, line),
+    )
+
+
+def test_argname_overlap():
+    with pytest.raises(SyntaxError) as e:
+        @asconstants(a=1)
+        def f(a):
+            pass
+
+    assert str(e.value) == "argument names overlap with constant names: {'a'}"
