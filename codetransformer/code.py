@@ -568,7 +568,6 @@ class Code:
             lnos[n] = reverse_lnotab.get(instr)
         return dict(zip(instrs, ffill(lnos)))
 
-
     @property
     def py_lnotab(self):
         """The encoded lnotab that python uses to compute when lines start.

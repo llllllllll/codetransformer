@@ -1,4 +1,3 @@
-import re
 from sys import _getframe
 from types import CodeType
 
