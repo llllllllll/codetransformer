@@ -79,19 +79,6 @@ class overloaded_dicts(CodeTransformer):
         yield instructions.STORE_SUBSCR()
         self.begin(IN_COMPREHENSION)
 
-    @pattern(instructions.BUILD_MAP)
-    def _build_map(self, instr):
-        yield instructions.LOAD_CONST(self.astype).steal(instr)
-        # TOS  = self.astype
-
-        yield instructions.CALL_FUNCTION(0)
-        # TOS  = m = self.astype()
-
-        yield from (instructions.DUP_TOP(),) * instr.arg
-        # TOS  = m
-        # ...
-        # TOS[instr.arg] = m
-
     @pattern(instructions.RETURN_VALUE, startcodes=(IN_COMPREHENSION,))
     def _return_value(self, instr):
         yield instructions.LOAD_FAST('__map__').steal(instr)
@@ -99,33 +86,80 @@ class overloaded_dicts(CodeTransformer):
 
         yield instr
 
-    @pattern(instructions.STORE_MAP)
-    def _store_map(self, instr):
-        # TOS  = k
-        # TOS1 = v
-        # TOS2 = m
-        # TOS3 = m
+    if hasattr(instructions, 'STORE_MAP'):
+        # Python 3.4
 
-        yield instructions.ROT_THREE().steal(instr)
-        # TOS  = v
-        # TOS1 = m
-        # TOS2 = k
-        # TOS3 = m
+        @pattern(instructions.BUILD_MAP)
+        def _build_map(self, instr):
+            yield instructions.LOAD_CONST(self.astype).steal(instr)
+            # TOS  = self.astype
 
-        yield instructions.ROT_THREE()
-        # TOS  = m
-        # TOS1 = k
-        # TOS2 = v
-        # TOS3 = m
+            yield instructions.CALL_FUNCTION(0)
+            # TOS  = m = self.astype()
 
-        yield instructions.ROT_TWO()
-        # TOS  = k
-        # TOS1 = m
-        # TOS2 = v
-        # TOS3 = m
+            yield from (instructions.DUP_TOP(),) * instr.arg
+            # TOS  = m
+            # ...
+            # TOS[instr.arg] = m
 
-        yield instructions.STORE_SUBSCR()
-        # TOS  = m
+        @pattern(instructions.STORE_MAP)
+        def _store_map(self, instr):
+            # TOS  = k
+            # TOS1 = v
+            # TOS2 = m
+            # TOS3 = m
+
+            yield instructions.ROT_THREE().steal(instr)
+            # TOS  = v
+            # TOS1 = m
+            # TOS2 = k
+            # TOS3 = m
+
+            yield instructions.ROT_THREE()
+            # TOS  = m
+            # TOS1 = k
+            # TOS2 = v
+            # TOS3 = m
+
+            yield instructions.ROT_TWO()
+            # TOS  = k
+            # TOS1 = m
+            # TOS2 = v
+            # TOS3 = m
+
+            yield instructions.STORE_SUBSCR()
+            # TOS  = m
+
+    else:
+        # Python 3.5 and beyond!
+
+        def _construct_map(self, key_value_pairs):
+            mapping = self.astype()
+            for key, value in zip(key_value_pairs[::2], key_value_pairs[1::2]):
+                mapping[key] = value
+            return mapping
+
+        @pattern(instructions.BUILD_MAP)
+        def _build_map(self, instr):
+            # TOS      = vn
+            # TOS1     = kn
+            # ...
+            # TOSN     = v0
+            # TOSN + 1 = k0
+            # Construct a tuple of (k0, v0, k1, v1, ..., kn, vn) for
+            # each of the key: value pairs in the dictionary.
+            yield instructions.BUILD_TUPLE(instr.arg * 2).steal(instr)
+            # TOS  = (k0, v0, k1, v1, ..., kn, vn)
+
+            yield instructions.LOAD_CONST(self._construct_map)
+            # TOS  = self._construct_map
+            # TOS1 = (k0, v0, k1, v1, ..., kn, vn)
+
+            yield instructions.ROT_TWO()
+            # TOS  = (k0, v0, k1, v1, ..., kn, vn)
+            # TOS1 = self._construct_map
+
+            yield instructions.CALL_FUNCTION(1)
 
 
 ordereddict_literals = overloaded_dicts(OrderedDict)
