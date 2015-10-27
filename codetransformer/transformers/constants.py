@@ -9,7 +9,6 @@ from ..instructions import (
     LOAD_CLASSDEREF,
     LOAD_CONST,
     LOAD_DEREF,
-    LOAD_FAST,
     LOAD_GLOBAL,
     LOAD_NAME,
     STORE_DEREF,
@@ -83,9 +82,7 @@ class asconstants(CodeTransformer):
             )
         return super().transform(code, **kwargs)
 
-    @pattern(
-        LOAD_NAME | LOAD_GLOBAL | LOAD_DEREF | LOAD_CLASSDEREF | LOAD_FAST,
-    )
+    @pattern(LOAD_NAME | LOAD_GLOBAL | LOAD_DEREF | LOAD_CLASSDEREF)
     def _load_name(self, instr):
         name = instr.arg
         if name not in self._constnames:
