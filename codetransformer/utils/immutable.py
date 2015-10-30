@@ -202,7 +202,7 @@ def __repr__(self):
     return '{cls}({args})'.format(
         cls=type(self).__name__,
         args=', '.join(starmap(
-            '{0}={1}'.format,
+            '{0}={1!r}'.format,
             ((s, getattr(self, s)) for s in self.__slots__),
         )),
     )
