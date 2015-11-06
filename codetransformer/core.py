@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from contextlib import contextmanager
 from ctypes import py_object, pythonapi
+from itertools import chain
 from operator import attrgetter
 from types import CodeType, FunctionType
 
@@ -39,9 +40,14 @@ class CodeTransformerMeta(type):
     ``codetransformer.pattern.pattern``
     """
     def __new__(mcls, name, bases, dict_):
-        dict_['_patterndispatcher'] = patterndispatcher(
-            *(v for v in dict_.values() if isinstance(v, boundpattern))
-        )
+        dict_['_patterndispatcher'] = patterndispatcher(*chain(
+            (v for v in dict_.values() if isinstance(v, boundpattern)),
+            *(
+                d and d.patterns for d in (
+                    getattr(b, '_patterndispatcher', ()) for b in bases
+                )
+            )
+        ))
         return super().__new__(mcls, name, bases, dict_)
 
     def __prepare__(self, bases):

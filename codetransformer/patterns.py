@@ -257,6 +257,9 @@ class boundpattern(immutable):
     __slots__ = '_compiled', '_startcodes', '_f'
 
     def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
         return type(self)(
             self._compiled,
             self._startcodes,
@@ -282,18 +285,21 @@ class NoMatches(Exception):
 
 
 class patterndispatcher(immutable):
-    """A set of boundpatterns that can dispatch onto instrs.
+    """A set of patterns that can dispatch onto instrs.
     """
-    __slots__ = '*_boundpatterns',
+    __slots__ = '*patterns',
 
     def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
         return type(self)(*map(
             methodcaller('__get__', instance, owner),
-            self._boundpatterns,
+            self.patterns,
         ))
 
     def __call__(self, compiled_instrs, instrs, startcode):
-        for p in self._boundpatterns:
+        for p in self.patterns:
             try:
                 return p(compiled_instrs, instrs, startcode)
             except KeyError:
