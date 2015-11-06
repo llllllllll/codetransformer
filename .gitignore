@@ -59,3 +59,6 @@ benchmarks.db
 
 # pypi
 MANIFEST
+
+# pytest
+.cache
