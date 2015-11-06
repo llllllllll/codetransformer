@@ -2,7 +2,6 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from ctypes import py_object, pythonapi
 from itertools import chain
-from operator import attrgetter
 from types import CodeType, FunctionType
 
 from .code import Code
@@ -10,7 +9,6 @@ from .instructions import LOAD_CONST, STORE_FAST, LOAD_FAST
 from .patterns import (
     boundpattern,
     patterndispatcher,
-    NoMatches,
     DEFAULT_STARTCODE,
 )
 
@@ -40,11 +38,11 @@ class CodeTransformerMeta(type):
     ``codetransformer.pattern.pattern``
     """
     def __new__(mcls, name, bases, dict_):
-        dict_['_patterndispatcher'] = patterndispatcher(*chain(
+        dict_['patterndispatcher'] = patterndispatcher(*chain(
             (v for v in dict_.values() if isinstance(v, boundpattern)),
             *(
                 d and d.patterns for d in (
-                    getattr(b, '_patterndispatcher', ()) for b in bases
+                    getattr(b, 'patterndispatcher', ()) for b in bases
                 )
             )
         ))
@@ -158,23 +156,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
             instr.arg = varname
 
         with self._new_context(code):
-            opcodes = bytes(map(attrgetter('opcode'), code))
-            idx = 0  # The current index into the pre-transformed instrs.
-            post_transform = []  # The instrs that have been transformed.
-            dispatcher = self._patterndispatcher
-            while idx < len(code):
-                try:
-                    processed, nconsumed = dispatcher(
-                        opcodes[idx:],
-                        code[idx:],
-                        self.startcode
-                    )
-                except NoMatches:
-                    post_transform.append(code[idx])
-                    idx += 1
-                else:
-                    post_transform.extend(processed)
-                    idx += nconsumed
+            post_transform = self.patterndispatcher(code)
 
             return Code(
                 post_transform,

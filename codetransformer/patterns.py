@@ -1,4 +1,4 @@
-from operator import methodcaller, index
+from operator import methodcaller, index, attrgetter
 import re
 from types import MethodType
 
@@ -293,12 +293,21 @@ class patterndispatcher(immutable):
         if instance is None:
             return self
 
-        return type(self)(*map(
-            methodcaller('__get__', instance, owner),
-            self.patterns,
-        ))
+        return boundpatterndispatcher(
+            instance,
+            *map(
+                methodcaller('__get__', instance, owner),
+                self.patterns,
+            )
+        )
 
-    def __call__(self, compiled_instrs, instrs, startcode):
+
+class boundpatterndispatcher(immutable):
+    """A set of patterns bound to a transformer.
+    """
+    __slots__ = 'transformer', '*patterns'
+
+    def _dispatch(self, compiled_instrs, instrs, startcode):
         for p in self.patterns:
             try:
                 return p(compiled_instrs, instrs, startcode)
@@ -306,3 +315,25 @@ class patterndispatcher(immutable):
                 pass
 
         raise NoMatches(instrs, startcode)
+
+    def __call__(self, instrs):
+        opcodes = bytes(map(attrgetter('opcode'), instrs))
+        idx = 0  # The current index into the pre-transformed instrs.
+        post_transform = []  # The instrs that have been transformed.
+        transformer = self.transformer
+        while idx < len(instrs):
+            try:
+                processed, nconsumed = self._dispatch(
+                    opcodes[idx:],
+                    instrs[idx:],
+                    # NOTE: do not remove this attribute access
+                    # self._dispatch can mutate the value of the startcode
+                    transformer.startcode,
+                )
+            except NoMatches:
+                post_transform.append(instrs[idx])
+                idx += 1
+            else:
+                post_transform.extend(processed)
+                idx += nconsumed
+        return tuple(post_transform)
