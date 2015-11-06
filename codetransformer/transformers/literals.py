@@ -62,7 +62,7 @@ class overloaded_dicts(CodeTransformer):
         yield instructions.STORE_FAST('__map__')
 
         *body, map_add = instrs
-        yield from body
+        yield from self.patterndispatcher(body)
         # TOS  = k
         # TOS1 = v
 
@@ -237,8 +237,8 @@ decimal_literals = overloaded_floats(Decimal)
 
 
 def _start_comprehension(self, *instrs):
-    yield from instrs
     self.begin(IN_COMPREHENSION)
+    yield from self.patterndispatcher(instrs)
 
 
 def _return_value(self, instr):
