@@ -753,29 +753,39 @@ def test_if_else():
     )
 
 
-def test_if_elif():
+@pytest.mark.parametrize(
+    'last_statement,prefix',
+    product(
+        ("", "x = 'end'"),
+        ("not", "not not"),
+    ),
+)
+def test_if_elif(last_statement, prefix):
     check(
         dedent(
             """\
-            if a:
+            if {prefix} a:
                 b = c
             elif d:
                 e = f
-            elif g:
+            elif {prefix} g:
                 h = i
             else:
                 j = k
-            x = "end"
+            {last_statement}
             """
-        )
+        ).format(prefix=prefix, last_statement=last_statement)
     )
+
     check(
         dedent(
             """
             if a:
                 x = "before_b"
-                if b:
+                if {prefix} b:
                     x = "in_b"
+                elif b:
+                    x = "in_elif_b"
                 else:
                     x = "else_b"
                 w = "after_b"
@@ -783,7 +793,7 @@ def test_if_elif():
                 x = "in_c"
             else:
                 x = "in_else"
-            x = "end"
+            {last_statement}
             """
-        )
+        ).format(prefix=prefix, last_statement=last_statement)
     )

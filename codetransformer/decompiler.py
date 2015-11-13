@@ -89,6 +89,7 @@ def _instr(instr, queue, stack, body, context):
     )
 
 
+@_process_instr.register(instrs.POP_JUMP_IF_TRUE)
 @_process_instr.register(instrs.POP_JUMP_IF_FALSE)
 def _process_jump(instr, queue, stack, body, context):
     stack_effect_until_target = sum(
@@ -111,6 +112,9 @@ def make_if_statement(instr, queue, stack, context):
     Make an ast.If block from a POP_JUMP_IF_TRUE or POP_JUMP_IF_FALSE.
     """
     test_expr = make_expr(stack)
+    if isinstance(instr, instrs.POP_JUMP_IF_TRUE):
+        test_expr = ast.UnaryOp(op=ast.Not(), operand=test_expr)
+
     first_block = popwhile(op.is_not(instr.arg), queue, side='left')
     jump_to_end = expect(
         first_block.pop(), instrs.JUMP_FORWARD, "at end of if-block"
