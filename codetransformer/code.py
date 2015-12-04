@@ -1,16 +1,20 @@
+from collections import OrderedDict
 from dis import Bytecode, dis, findlinestarts
 from enum import IntEnum, unique
 from functools import reduce
+from itertools import repeat
 import operator as op
 from types import CodeType
 
 from .instructions import Instruction, LOAD_CONST
 from .utils.functional import scanl, reverse_dict, ffill
 from .utils.immutable import lazyval
+from .utils.instance import instance
 
 
 @unique
 class Flags(IntEnum):
+    # These enum values and comments are taken from CPython.
     CO_OPTIMIZED = 0x0001
     CO_NEWLOCALS = 0x0002
     CO_VARARGS = 0x0004
@@ -39,6 +43,99 @@ class Flags(IntEnum):
 
     CO_FUTURE_BARRY_AS_BDFL = 0x40000
     CO_FUTURE_GENERATOR_STOP = 0x80000
+
+    @instance
+    class max:
+        """The largest bitmask that represents a valid flag.
+        """
+        def __get__(self, instance, owner):
+            return owner.pack(**dict(zip(owner.__members__, repeat(True))))
+
+        def __set__(self, instance, value):
+            raise AttributeError("can't set 'max' attribute")
+
+    @classmethod
+    def pack(cls,
+             *,
+             CO_OPTIMIZED,
+             CO_NEWLOCALS,
+             CO_VARARGS,
+             CO_VARKEYWORDS,
+             CO_NESTED,
+             CO_GENERATOR,
+             CO_NOFREE,
+             CO_COROUTINE,
+             CO_ITERABLE_COROUTINE,
+             CO_FUTURE_DIVISION,
+             CO_FUTURE_ABSOLUTE_IMPORT,
+             CO_FUTURE_WITH_STATEMENT,
+             CO_FUTURE_PRINT_FUNCTION,
+             CO_FUTURE_UNICODE_LITERALS,
+             CO_FUTURE_BARRY_AS_BDFL,
+             CO_FUTURE_GENERATOR_STOP):
+        """Pack a flags into a bitmask.
+
+        I hope you like kwonly args.
+
+        Parameters
+        ----------
+        CO_OPTIMIZED : bool
+        CO_NEWLOCALS : bool
+        CO_VARARGS : bool
+        CO_VARKEYWORDS : bool
+        CO_NESTED : bool
+        CO_GENERATOR : bool
+        CO_NOFREE : bool
+        CO_COROUTINE : bool
+        CO_ITERABLE_COROUTINE : bool
+        CO_FUTURE_DIVISION : bool
+        CO_FUTURE_ABSOLUTE_IMPORT : bool
+        CO_FUTURE_WITH_STATEMENT : bool
+        CO_FUTURE_PRINT_FUNCTION : bool
+        CO_FUTURE_UNICODE_LITERALS : bool
+        CO_FUTURE_BARRY_AS_BDFL : bool
+        CO_FUTURE_GENERATOR_STOP : bool
+
+        Returns
+        -------
+        mask : int
+
+        See Also
+        --------
+        Flags.unpack
+        """
+        ls = locals()
+        return reduce(
+            op.or_,
+            (v for k, v in cls.__members__.items() if ls[k]),
+            0,
+        )
+
+    @classmethod
+    def unpack(cls, mask):
+        """Unpack a bitmask into a map of flag to bool.
+
+        Parameters
+        ----------
+        mask : int
+            A bitmask
+
+        Returns
+        -------
+        mapping : OrderedDict[str -> bool]
+            The mapping of flag name to flag status.
+
+        See Also
+        --------
+        Flags.pack
+        """
+        if mask > cls.max:
+            raise ValueError('Invalid mask, too large: %d' % mask)
+
+        return OrderedDict(
+            (k, bool(mask & getattr(cls, k)))
+            for k, v in cls.__members__.items()
+        )
 
 
 def _sparse_args(instrs):
@@ -589,8 +686,7 @@ class Code:
         See Objects/lnotab_notes.txt in the cpython source for more details.
         """
         reverse_lnotab = reverse_dict(self.lnotab)
-        py_lnotab = bytearray(len(reverse_lnotab) * 2)
-        idx = 0
+        py_lnotab = []
         prev_instr = 0
         prev_lno = self.firstlineno
         for addr, instr in enumerate(_sparse_args(self.instrs)):
@@ -598,12 +694,18 @@ class Code:
             if lno is None:
                 continue
 
-            py_lnotab[idx] = addr - prev_instr
-            prev_instr = addr
-            idx += 1
-            py_lnotab[idx] = lno - prev_lno
+            delta = lno - prev_lno
+            py_lnotab.append(addr - prev_instr)
+            py_lnotab.append(min(delta, 255))
+            delta -= 255
+            while delta > 0:
+                py_lnotab.append(0)
+                py_lnotab.append(min(delta, 255))
+                delta -= 255
+
             prev_lno = lno
-            idx += 1
+            prev_instr = addr
+
         return bytes(py_lnotab)
 
     @property
