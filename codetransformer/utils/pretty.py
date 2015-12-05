@@ -176,17 +176,21 @@ def a(text, mode='exec', indent='  ', file=None):
     pprint_ast(parse(text, mode=mode), indent=indent, file=file)
 
 
-def d(text, mode='exec', file=None):
+def d(obj, mode='exec', file=None):
     """
-    Interactive convenience for displaying the disassembly of a code string.
+    Interactive convenience for displaying the disassembly of a function,
+    module, or code string.
 
     Compiles `text` and recursively traverses the result looking for `code`
     objects to render with `dis.dis`.
 
     Parameters
     ----------
-    text : str
-        Text of Python code to compile and disassemble.
+    obj : str, CodeType, or object with __code__ attribute
+        Object to disassemble.
+        If `obj` is an instance of CodeType, we use it unchanged.
+        If `obj` is a string, we compile it with `mode` and then disassemble.
+        Otherwise, we look for a `__code__` attribute on `obj`.
     mode : {'exec', 'eval'}, optional
         Mode for `compile`.  Default is 'exec'.
     file : None or file-like object, optional
@@ -196,11 +200,22 @@ def d(text, mode='exec', file=None):
     if file is None:
         file = sys.stdout
 
-    for name, co in walk_code(compile(text, '<show>', mode)):
+    for name, co in walk_code(_extract_code(obj, compile_mode=mode)):
         print(name, file=file)
         print('-' * len(name), file=file)
         dis.dis(co, file=file)
         print('', file=file)
+
+
+def _extract_code(obj, compile_mode):
+    if isinstance(obj, CodeType):
+        return obj
+    elif isinstance(obj, str):
+        return compile(obj, '<show>', compile_mode)
+    elif hasattr(obj, '__code__'):
+        return obj.__code__
+    else:
+        raise ValueError("Don't know how to extract code from %s." % obj)
 
 
 _DISPLAY_TEMPLATE = """\
