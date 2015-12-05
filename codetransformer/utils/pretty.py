@@ -1,6 +1,6 @@
 from ast import iter_fields, AST, Name, Num, parse
 import dis
-from functools import partial
+from functools import partial, singledispatch
 from io import StringIO
 from itertools import chain
 from operator import attrgetter
@@ -200,22 +200,41 @@ def d(obj, mode='exec', file=None):
     if file is None:
         file = sys.stdout
 
-    for name, co in walk_code(_extract_code(obj, compile_mode=mode)):
+    for name, co in walk_code(extract_code(obj, compile_mode=mode)):
         print(name, file=file)
         print('-' * len(name), file=file)
         dis.dis(co, file=file)
         print('', file=file)
 
 
-def _extract_code(obj, compile_mode):
-    if isinstance(obj, CodeType):
-        return obj
-    elif isinstance(obj, str):
-        return compile(obj, '<show>', compile_mode)
-    elif hasattr(obj, '__code__'):
-        return obj.__code__
-    else:
+@singledispatch
+def extract_code(obj, compile_mode):
+    """
+    Generic function for converting objects into instances of `CodeType`.
+    """
+    try:
+        code = obj.__code__
+        if isinstance(code, CodeType):
+            return code
+        raise ValueError(
+            "{obj} has a `__code__` attribute, "
+            "but it's an instance of {notcode!r}, not CodeType.".format(
+                obj=obj,
+                notcode=type(code).__name__,
+            )
+        )
+    except AttributeError:
         raise ValueError("Don't know how to extract code from %s." % obj)
+
+
+@extract_code.register(CodeType)
+def _(obj, compile_mode):
+    return obj
+
+
+@extract_code.register(str)
+def _(obj, compile_mode):
+    return compile(obj, '<show>', compile_mode)
 
 
 _DISPLAY_TEMPLATE = """\
