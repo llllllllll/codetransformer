@@ -1,10 +1,13 @@
 from abc import ABCMeta, abstractmethod
 from dis import opname, opmap, hasjabs, hasjrel, HAVE_ARGUMENT, stack_effect
+from enum import (
+    IntEnum,
+    unique,
+)
 from re import escape
 
-
 from .patterns import matchable
-from .utils.immutable import immutableattr
+from .utils.immutable import immutableattr, immutable
 from .utils.no_default import no_default
 
 
@@ -136,7 +139,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
             raise TypeError(
                 "{} missing 1 required argument: 'arg'".format(self.opname),
             )
-        self.arg = arg
+        self.arg = self._normalize_arg(arg)
         self._target_of = set()
 
     def __repr__(self):
@@ -145,6 +148,10 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
             op=self.opname,
             arg='(' + repr(arg) + ')' if self.arg is not self._no_arg else '',
         )
+
+    @staticmethod
+    def _normalize_arg(arg):
+        return arg
 
     def steal(self, instr):
         """Steal the jump index off of `instr`.
@@ -210,6 +217,21 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
               if self.have_arg else ())
         )
 
+    def __eq__(self, other):
+        return type(self) == type(other) and self.arg == other.arg
+
+    def __hash__(self):
+        return id(self)
+
+
+class _RawArg(immutable):
+    """A class to hold arguments that are not yet initialized so that they
+    don't break subclass's type checking code.
+
+    This is used in the first pass of instruction creating in Code.from_pycode.
+    """
+    __slots__ = 'value',
+
 
 def _mk_call_init(class_):
     """Create an __init__ function for a call type instruction.
@@ -225,6 +247,8 @@ def _mk_call_init(class_):
         The __init__ method for the class.
     """
     def __init__(self, packed=no_default, *, positional=0, keyword=0):
+        if isinstance(packed, _RawArg):
+            packed = packed.value
         if packed is no_default:
             arg = int.from_bytes(bytes((positional, keyword)), 'little')
         elif not positional and not keyword:
@@ -245,14 +269,86 @@ def _call_repr(self):
     )
 
 
+def _check_jmp_arg(self, arg):
+    if not isinstance(arg, (Instruction, _RawArg)):
+        raise TypeError(
+            '%s argument must be an instruction' % type(self).__name__,
+        )
+    if isinstance(arg, Instruction):
+        arg._target_of.add(self)
+    return arg
+
+
+class CompareOpMeta(InstructionMeta):
+    @unique
+    class comparators(IntEnum):
+        LT = 0
+        LE = 1
+        EQ = 2
+        NE = 3
+        GT = 4
+        GE = 5
+        IN = 6
+        NOT_IN = 7
+        IS = 8
+        IS_NOT = 9
+        EXCEPTION_MATCH = 10
+
+        @classmethod
+        def _resolve(cls, value):
+            if isinstance(value, cls):
+                return value
+            if isinstance(value, _RawArg):
+                value = value.value
+            for _, enum in cls.__members__.items():
+                if value == enum:
+                    return enum
+            raise ValueError('%r is not a valid Comparator' % value)
+
+        def __repr__(self):
+            return '<COMPARE_OP.%s.%s: %r>' % (
+                self.__class__.__name__, self._name_, self._value_,
+            )
+
+    class ComparatorDescr:
+        def __init__(self, comparator):
+            self._comparator = comparator
+
+        def __get__(self, instance, owner):
+            if instance is None:
+                return self
+            return instance(self._comparator)
+
+    for comparator in comparators:
+        locals()[comparator._name_] = ComparatorDescr(comparator)
+    del comparator
+    del ComparatorDescr
+
+
+metamap = {
+    'COMPARE_OP': CompareOpMeta,
+}
+
+
 globals_ = globals()
 for name, opcode in opmap.items():
-    globals_[name] = class_ = InstructionMeta(
-        opname[opcode], (Instruction,), {}, opcode=opcode,
+    globals_[name] = class_ = metamap.get(name, InstructionMeta)(
+        opname[opcode],
+        (Instruction,), {
+            '__module__': __name__,
+            '__qualname__': '.'.join((__name__, name)),
+        },
+        opcode=opcode,
     )
     if name.startswith('CALL_FUNCTION'):
         class_.__init__ = _mk_call_init(class_)
         class_.__repr__ = _call_repr
+
+    if name == 'COMPARE_OP':
+        class_._normalize_arg = staticmethod(class_.comparators._resolve)
+
+    if class_.is_jmp:
+        class_._normalize_arg = _check_jmp_arg
 
     del class_
 
@@ -260,5 +356,7 @@ for name, opcode in opmap.items():
 # Clean up the namespace
 del name
 del globals_
+del metamap
+del _check_jmp_arg
 del _call_repr
 del _mk_call_init

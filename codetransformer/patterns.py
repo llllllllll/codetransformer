@@ -268,17 +268,17 @@ class boundpattern(immutable):
 
     def __call__(self, compiled_instrs, instrs, startcode):
         if startcode not in self._startcodes:
-            raise KeyError(compiled_instrs, startcode)
+            raise NoMatch(compiled_instrs, startcode)
 
         match = self._compiled.match(compiled_instrs)
         if match is None or match.end is 0:
-            raise KeyError(compiled_instrs, startcode)
+            raise NoMatch(compiled_instrs, startcode)
 
         mend = match.end()
         return self._f(*instrs[:mend]), mend
 
 
-class NoMatches(Exception):
+class NoMatch(Exception):
     """Indicates that there was no match found in this dispatcher.
     """
     pass
@@ -311,10 +311,10 @@ class boundpatterndispatcher(immutable):
         for p in self.patterns:
             try:
                 return p(compiled_instrs, instrs, startcode)
-            except KeyError:
+            except NoMatch:
                 pass
 
-        raise NoMatches(instrs, startcode)
+        raise NoMatch(instrs, startcode)
 
     def __call__(self, instrs):
         opcodes = bytes(map(attrgetter('opcode'), instrs))
@@ -330,7 +330,7 @@ class boundpatterndispatcher(immutable):
                     # self._dispatch can mutate the value of the startcode
                     transformer.startcode,
                 )
-            except NoMatches:
+            except NoMatch:
                 post_transform.append(instrs[idx])
                 idx += 1
             else:

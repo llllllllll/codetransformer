@@ -1,11 +1,5 @@
 from sys import exc_info
 
-from enum import (
-    IntEnum,
-    unique,
-)
-
-
 from ..core import CodeTransformer
 from ..instructions import (
     CALL_FUNCTION,
@@ -16,21 +10,6 @@ from ..instructions import (
     ROT_TWO,
 )
 from ..patterns import pattern
-
-
-@unique
-class Comparisons(IntEnum):
-    LT = 0
-    LE = 1
-    EQ = 2
-    NE = 3
-    GT = 4
-    GE = 5
-    IN = 6
-    NOT_IN = 7
-    IS = 8
-    IS_NOT = 9
-    EXCEPTION_MATCH = 10
 
 
 def match(match_expr, exc_type, exc_value, exc_traceback):
@@ -93,7 +72,7 @@ class pattern_matched_exceptions(CodeTransformer):
 
     @pattern(COMPARE_OP)
     def _compare_op(self, instr):
-        if instr.arg == Comparisons.EXCEPTION_MATCH:
+        if instr == COMPARE_OP.EXCEPTION_MATCH:
             yield ROT_TWO().steal(instr)
             yield POP_TOP()
             yield LOAD_CONST(self._matcher)

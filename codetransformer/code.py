@@ -6,7 +6,7 @@ from itertools import repeat
 import operator as op
 from types import CodeType
 
-from .instructions import Instruction, LOAD_CONST
+from .instructions import Instruction, LOAD_CONST, _RawArg
 from .utils.functional import scanl, reverse_dict, ffill
 from .utils.immutable import lazyval
 from .utils.instance import instance
@@ -367,7 +367,7 @@ class Code:
             _sparse_args(
                 Instruction.from_opcode(
                     b.opcode,
-                    Instruction._no_arg if b.arg is None else b.arg,
+                    Instruction._no_arg if b.arg is None else _RawArg(b.arg),
                 ) for b in Bytecode(co)
             ),
         )
@@ -376,21 +376,23 @@ class Code:
                 # The sparse value
                 continue
             if instr.absjmp:
-                instr.arg = sparse_instrs[instr.arg]
+                instr.arg = sparse_instrs[instr.arg.value]
             elif instr.reljmp:
-                instr.arg = sparse_instrs[instr.arg + idx + 3]
+                instr.arg = sparse_instrs[instr.arg.value + idx + 3]
             elif isinstance(instr, LOAD_CONST):
-                instr.arg = co.co_consts[instr.arg]
+                instr.arg = co.co_consts[instr.arg.value]
             elif instr.uses_name:
-                instr.arg = co.co_names[instr.arg]
+                instr.arg = co.co_names[instr.arg.value]
             elif instr.uses_varname:
-                instr.arg = co.co_varnames[instr.arg]
+                instr.arg = co.co_varnames[instr.arg.value]
             elif instr.uses_free:
                 instr.arg = _freevar_argname(
-                    instr.arg,
+                    instr.arg.value,
                     co.co_freevars,
                     co.co_cellvars,
                 )
+            elif instr.have_arg and isinstance(instr.arg, _RawArg):
+                instr.arg = instr.arg.value
 
         flags = co.co_flags
         has_vargs = bool(flags & Flags.CO_VARARGS)
@@ -731,7 +733,10 @@ class Code:
         idx : int
             The index of instr in this code object.
         """
-        return self._instrs.index(instr)
+        for n, elem in enumerate(self.instrs):
+            if elem is instr:
+                return n
+        raise ValueError('%r not in this code object' % instr)
 
     def bytecode_offset(self, instr):
         """Returns the offset of instr in the bytecode representation.
@@ -746,7 +751,10 @@ class Code:
         idx : int
             The index of instr in this code object in the sparse instructions.
         """
-        return self.sparse_instrs.index(instr)
+        for n, elem in enumerate(self.sparse_instrs):
+            if elem is instr:
+                return n
+        raise ValueError('%r not in this code object' % instr)
 
     def __getitem__(self, key):
         return self.instrs[key]
