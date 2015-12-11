@@ -72,7 +72,7 @@ class pattern_matched_exceptions(CodeTransformer):
 
     @pattern(COMPARE_OP)
     def _compare_op(self, instr):
-        if instr == COMPARE_OP.EXCEPTION_MATCH:
+        if instr.equiv(COMPARE_OP.EXCEPTION_MATCH):
             yield ROT_TWO().steal(instr)
             yield POP_TOP()
             yield LOAD_CONST(self._matcher)

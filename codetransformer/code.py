@@ -733,10 +733,7 @@ class Code:
         idx : int
             The index of instr in this code object.
         """
-        for n, elem in enumerate(self.instrs):
-            if elem is instr:
-                return n
-        raise ValueError('%r not in this code object' % instr)
+        return self.instrs.index(instr)
 
     def bytecode_offset(self, instr):
         """Returns the offset of instr in the bytecode representation.
@@ -751,10 +748,7 @@ class Code:
         idx : int
             The index of instr in this code object in the sparse instructions.
         """
-        for n, elem in enumerate(self.sparse_instrs):
-            if elem is instr:
-                return n
-        raise ValueError('%r not in this code object' % instr)
+        return self.sparse_instrs.index(instr)
 
     def __getitem__(self, key):
         return self.instrs[key]

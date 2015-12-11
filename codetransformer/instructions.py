@@ -217,11 +217,28 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
               if self.have_arg else ())
         )
 
-    def __eq__(self, other):
-        return type(self) == type(other) and self.arg == other.arg
+    def equiv(self, instr):
+        """Check equivalence of instructions. This checks against the types
+        and the arguments of the instructions
 
-    def __hash__(self):
-        return id(self)
+        Parameters
+        ----------
+        instr : Instruction
+            The instruction to check against.
+
+        Returns
+        -------
+        is_equiv : bool
+            If the instructions are equivalent.
+
+        Notes
+        -----
+        This is a seperate concept from instruction identity. Two seperate
+        instructions can be equivalent without being the same exact instance.
+        This means that two equivalent instructions can be at different points
+        in the bytecode or be targeted by different jumps.
+        """
+        return type(self) == type(instr) and self.arg == instr.arg
 
 
 class _RawArg(immutable):
