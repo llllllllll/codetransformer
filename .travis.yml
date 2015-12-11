@@ -5,10 +5,8 @@ python:
 install:
  - pip install -e .[dev]
 
-before_script:
- - flake8 codetransformer
-
 script:
+ - flake8 codetransformer
  - py.test codetransformer
 
 notifications:
