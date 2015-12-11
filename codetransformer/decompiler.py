@@ -1,6 +1,7 @@
 import ast
 from collections import deque
 from functools import singledispatch
+from itertools import takewhile
 import types
 
 from toolz import complement, compose, curry
@@ -86,6 +87,52 @@ def _instr(instr, queue, stack, body, context):
     raise DecompilationError(
         "Don't know how to decompile instructions of type %s" % type(instr)
     )
+
+
+@_process_instr.register(instrs.POP_JUMP_IF_TRUE)
+@_process_instr.register(instrs.POP_JUMP_IF_FALSE)
+def _process_jump(instr, queue, stack, body, context):
+    stack_effect_until_target = sum(
+        map(
+            op.attrgetter('stack_effect'),
+            takewhile(op.is_not(instr.arg), queue)
+        )
+    )
+    if stack_effect_until_target == 0:
+        body.append(make_if_statement(instr, queue, stack, context))
+        return
+    else:
+        raise DecompilationError(
+            "Don't know how to decompile `and`/`or`/`ternary` exprs."
+        )
+
+
+def make_if_statement(instr, queue, stack, context):
+    """
+    Make an ast.If block from a POP_JUMP_IF_TRUE or POP_JUMP_IF_FALSE.
+    """
+    test_expr = make_expr(stack)
+    if isinstance(instr, instrs.POP_JUMP_IF_TRUE):
+        test_expr = ast.UnaryOp(op=ast.Not(), operand=test_expr)
+
+    first_block = popwhile(op.is_not(instr.arg), queue, side='left')
+    jump_to_end = expect(
+        first_block.pop(), instrs.JUMP_FORWARD, "at end of if-block"
+    )
+
+    body = instrs_to_body(first_block, context)
+
+    # First instruction after the whole if-block.
+    end = jump_to_end.arg
+    if instr.arg is jump_to_end.arg:
+        orelse = []
+    else:
+        orelse = instrs_to_body(
+            popwhile(op.is_not(end), queue, side='left'),
+            context,
+        )
+
+    return ast.If(test=test_expr, body=body, orelse=orelse)
 
 
 @_process_instr.register(instrs.EXTENDED_ARG)

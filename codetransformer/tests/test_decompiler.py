@@ -725,3 +725,75 @@ def test_nested_with():
             """
         ),
     )
+
+
+def test_simple_if():
+    check(
+        dedent(
+            """
+            if a:
+                b = c
+            x = "end"
+            """
+        )
+    )
+
+
+def test_if_else():
+    check(
+        dedent(
+            """
+            if a:
+                b = c
+            else:
+                b = d
+            x = "end"
+            """
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    'last_statement,prefix',
+    product(
+        ("", "x = 'end'"),
+        ("not", "not not"),
+    ),
+)
+def test_if_elif(last_statement, prefix):
+    check(
+        dedent(
+            """\
+            if {prefix} a:
+                b = c
+            elif d:
+                e = f
+            elif {prefix} g:
+                h = i
+            else:
+                j = k
+            {last_statement}
+            """
+        ).format(prefix=prefix, last_statement=last_statement)
+    )
+
+    check(
+        dedent(
+            """
+            if a:
+                x = "before_b"
+                if {prefix} b:
+                    x = "in_b"
+                elif b:
+                    x = "in_elif_b"
+                else:
+                    x = "else_b"
+                w = "after_b"
+            elif c:
+                x = "in_c"
+            else:
+                x = "in_else"
+            {last_statement}
+            """
+        ).format(prefix=prefix, last_statement=last_statement)
+    )
