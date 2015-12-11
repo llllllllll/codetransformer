@@ -6,8 +6,8 @@ install:
  - pip install -e .[dev]
 
 script:
- - flake8 codetransformer
  - py.test codetransformer
+ - flake8 codetransformer
 
 notifications:
   email: false
