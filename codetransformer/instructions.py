@@ -7,7 +7,7 @@ from enum import (
 from re import escape
 
 from .patterns import matchable
-from .utils.immutable import immutableattr, immutable
+from .utils.immutable import immutableattr
 from .utils.no_default import no_default
 
 
@@ -241,13 +241,12 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         return type(self) == type(instr) and self.arg == instr.arg
 
 
-class _RawArg(immutable):
+class _RawArg(int):
     """A class to hold arguments that are not yet initialized so that they
     don't break subclass's type checking code.
 
     This is used in the first pass of instruction creating in Code.from_pycode.
     """
-    __slots__ = 'value',
 
 
 def _mk_call_init(class_):
@@ -264,8 +263,6 @@ def _mk_call_init(class_):
         The __init__ method for the class.
     """
     def __init__(self, packed=no_default, *, positional=0, keyword=0):
-        if isinstance(packed, _RawArg):
-            packed = packed.value
         if packed is no_default:
             arg = int.from_bytes(bytes((positional, keyword)), 'little')
         elif not positional and not keyword:

@@ -168,7 +168,6 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
                 firstlineno=code.firstlineno,
                 lnotab=lnotab if lnotab is not None else code.lnotab,
                 nested=code.is_nested,
-                generator=code.is_generator,
                 coroutine=code.is_coroutine,
                 iterable_coroutine=code.is_iterable_coroutine,
             )

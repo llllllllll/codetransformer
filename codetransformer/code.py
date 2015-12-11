@@ -6,7 +6,13 @@ from itertools import repeat
 import operator as op
 from types import CodeType
 
-from .instructions import Instruction, LOAD_CONST, _RawArg
+from .instructions import (
+    Instruction,
+    LOAD_CONST,
+    YIELD_FROM,
+    YIELD_VALUE,
+    _RawArg,
+)
 from .utils.functional import scanl, reverse_dict, ffill
 from .utils.immutable import lazyval
 from .utils.instance import instance
@@ -211,8 +217,6 @@ class Code:
         The mapping from instruction to the line that it starts.
     nested : bool, optional
         Is this code object nested in another code object?
-    generator : bool, optional
-        Is this code object a generator?
     coroutine : bool, optional
         Is this code object a coroutine (async def)?
     iterable_coroutine : bool, optional
@@ -270,24 +274,11 @@ class Code:
                  firstlineno=1,
                  lnotab=None,
                  nested=False,
-                 generator=False,
                  coroutine=False,
                  iterable_coroutine=False,
                  new_locals=False):
 
         instrs = tuple(instrs)  # strictly evaluate any generators.
-
-        # Create the base flags for the function.
-        flags = reduce(
-            op.or_, (
-                (nested and Flag.CO_NESTED),
-                (generator and Flag.CO_GENERATOR),
-                (coroutine and Flag.CO_COROUTINE),
-                (iterable_coroutine and Flag.CO_ITERABLE_COROUTINE),
-                (new_locals and Flag.CO_NEWLOCALS)
-            ),
-            0,
-        )
 
         # The starting varnames (the names of the arguments to the function)
         argcount = [0]
@@ -312,14 +303,9 @@ class Code:
             append_argname(argname)
 
         if varg is not None:
-            flags |= Flag.CO_VARARGS
             append_argname(varg)
         if kwarg is not None:
-            flags |= Flag.CO_VARKEYWORDS
             append_argname(kwarg)
-
-        if not any(map(op.attrgetter('uses_free'), instrs)):
-            flags |= Flag.CO_NOFREE
 
         cellvar_names = set(cellvars)
         freevar_names = set(freevars)
@@ -346,7 +332,27 @@ class Code:
         self._filename = filename
         self._firstlineno = firstlineno
         self._lnotab = lnotab or {}
-        self._flags = flags
+        self._flags = Flag.pack(
+            CO_OPTIMIZED=True,
+            CO_NEWLOCALS=new_locals,
+            CO_VARARGS=varg is not None,
+            CO_VARKEYWORDS=kwarg is not None,
+            CO_NESTED=nested,
+            CO_GENERATOR=any(
+                isinstance(instr, (YIELD_VALUE, YIELD_FROM))
+                for instr in instrs
+            ),
+            CO_NOFREE=not any(map(op.attrgetter('uses_free'), instrs)),
+            CO_COROUTINE=coroutine,
+            CO_ITERABLE_COROUTINE=iterable_coroutine,
+            CO_FUTURE_DIVISION=False,
+            CO_FUTURE_ABSOLUTE_IMPORT=False,
+            CO_FUTURE_WITH_STATEMENT=False,
+            CO_FUTURE_PRINT_FUNCTION=False,
+            CO_FUTURE_UNICODE_LITERALS=False,
+            CO_FUTURE_BARRY_AS_BDFL=False,
+            CO_FUTURE_GENERATOR_STOP=False,
+        )
 
     @classmethod
     def from_pycode(cls, co):
@@ -376,27 +382,27 @@ class Code:
                 # The sparse value
                 continue
             if instr.absjmp:
-                instr.arg = sparse_instrs[instr.arg.value]
+                instr.arg = sparse_instrs[instr.arg]
             elif instr.reljmp:
-                instr.arg = sparse_instrs[instr.arg.value + idx + 3]
+                instr.arg = sparse_instrs[instr.arg + idx + 3]
             elif isinstance(instr, LOAD_CONST):
-                instr.arg = co.co_consts[instr.arg.value]
+                instr.arg = co.co_consts[instr.arg]
             elif instr.uses_name:
-                instr.arg = co.co_names[instr.arg.value]
+                instr.arg = co.co_names[instr.arg]
             elif instr.uses_varname:
-                instr.arg = co.co_varnames[instr.arg.value]
+                instr.arg = co.co_varnames[instr.arg]
             elif instr.uses_free:
                 instr.arg = _freevar_argname(
-                    instr.arg.value,
+                    instr.arg,
                     co.co_freevars,
                     co.co_cellvars,
                 )
             elif instr.have_arg and isinstance(instr.arg, _RawArg):
-                instr.arg = instr.arg.value
+                instr.arg = int(instr.arg)
 
-        flags = co.co_flags
-        has_vargs = bool(flags & Flag.CO_VARARGS)
-        has_kwargs = bool(flags & Flag.CO_VARKEYWORDS)
+        flags = Flag.unpack(co.co_flags)
+        has_vargs = flags['CO_VARARGS']
+        has_kwargs = flags['CO_VARKEYWORDS']
 
         # Here we convert the varnames format into our argnames format.
         paramnames = co.co_varnames[
@@ -429,11 +435,10 @@ class Code:
             lnotab={
                 lno: sparse_instrs[off] for off, lno in findlinestarts(co)
             },
-            nested=flags & Flag.CO_NESTED,
-            generator=flags & Flag.CO_GENERATOR,
-            coroutine=flags & Flag.CO_COROUTINE,
-            iterable_coroutine=flags & Flag.CO_ITERABLE_COROUTINE,
-            new_locals=flags & Flag.CO_NEWLOCALS,
+            nested=flags['CO_NESTED'],
+            coroutine=flags['CO_COROUTINE'],
+            iterable_coroutine=flags['CO_ITERABLE_COROUTINE'],
+            new_locals=flags['CO_NEWLOCALS'],
         )
 
     def to_pycode(self):
@@ -499,7 +504,7 @@ class Code:
             self.kwonlyargcount,
             len(varnames),
             self.stacksize,
-            self.flags,
+            self.py_flags,
             bytes(bc),
             consts,
             names,
@@ -602,8 +607,19 @@ class Code:
 
     @property
     def flags(self):
-        """The flags of this code object. This is the bitwise or of
-        the enum values defined in the Flag class.
+        """The flags of this code object represented as a mapping from flag
+        name to boolean status.
+
+        Notes
+        -----
+        This is a copy of the underlying flags. Mutations will not affect
+        the code object.
+        """
+        return Flag.unpack(self._flags)
+
+    @property
+    def py_flags(self):
+        """The flags of this code object represented as a bitmask.
         """
         return self._flags
 
