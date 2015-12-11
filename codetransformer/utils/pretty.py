@@ -232,7 +232,7 @@ def _(obj, compile_mode):
     return obj
 
 
-@extract_code.register(str)
+@extract_code.register(str)  # noqa
 def _(obj, compile_mode):
     return compile(obj, '<show>', compile_mode)
 
