@@ -7,7 +7,7 @@ from operator import attrgetter
 import sys
 from types import CodeType
 
-from codetransformer.code import Flags
+from codetransformer.code import Flag
 
 
 INCLUDE_ATTRIBUTES_DEFAULT = False
@@ -96,7 +96,7 @@ def pformat_ast(node,
 
 def _extend_name(prev, parent_co):
     return prev + (
-        '.<locals>.' if parent_co.co_flags & Flags.CO_NEWLOCALS else '.'
+        '.<locals>.' if parent_co.co_flags & Flag.CO_NEWLOCALS else '.'
     )
 
 

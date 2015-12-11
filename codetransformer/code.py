@@ -13,7 +13,7 @@ from .utils.instance import instance
 
 
 @unique
-class Flags(IntEnum):
+class Flag(IntEnum):
     # These enum values and comments are taken from CPython.
     CO_OPTIMIZED = 0x0001
     CO_NEWLOCALS = 0x0002
@@ -102,7 +102,7 @@ class Flags(IntEnum):
 
         See Also
         --------
-        Flags.unpack
+        Flag.unpack
         """
         ls = locals()
         return reduce(
@@ -127,7 +127,7 @@ class Flags(IntEnum):
 
         See Also
         --------
-        Flags.pack
+        Flag.pack
         """
         if mask > cls.max:
             raise ValueError('Invalid mask, too large: %d' % mask)
@@ -280,11 +280,11 @@ class Code:
         # Create the base flags for the function.
         flags = reduce(
             op.or_, (
-                (nested and Flags.CO_NESTED),
-                (generator and Flags.CO_GENERATOR),
-                (coroutine and Flags.CO_COROUTINE),
-                (iterable_coroutine and Flags.CO_ITERABLE_COROUTINE),
-                (new_locals and Flags.CO_NEWLOCALS)
+                (nested and Flag.CO_NESTED),
+                (generator and Flag.CO_GENERATOR),
+                (coroutine and Flag.CO_COROUTINE),
+                (iterable_coroutine and Flag.CO_ITERABLE_COROUTINE),
+                (new_locals and Flag.CO_NEWLOCALS)
             ),
             0,
         )
@@ -312,14 +312,14 @@ class Code:
             append_argname(argname)
 
         if varg is not None:
-            flags |= Flags.CO_VARARGS
+            flags |= Flag.CO_VARARGS
             append_argname(varg)
         if kwarg is not None:
-            flags |= Flags.CO_VARKEYWORDS
+            flags |= Flag.CO_VARKEYWORDS
             append_argname(kwarg)
 
         if not any(map(op.attrgetter('uses_free'), instrs)):
-            flags |= Flags.CO_NOFREE
+            flags |= Flag.CO_NOFREE
 
         cellvar_names = set(cellvars)
         freevar_names = set(freevars)
@@ -395,8 +395,8 @@ class Code:
                 instr.arg = instr.arg.value
 
         flags = co.co_flags
-        has_vargs = bool(flags & Flags.CO_VARARGS)
-        has_kwargs = bool(flags & Flags.CO_VARKEYWORDS)
+        has_vargs = bool(flags & Flag.CO_VARARGS)
+        has_kwargs = bool(flags & Flag.CO_VARKEYWORDS)
 
         # Here we convert the varnames format into our argnames format.
         paramnames = co.co_varnames[
@@ -429,11 +429,11 @@ class Code:
             lnotab={
                 lno: sparse_instrs[off] for off, lno in findlinestarts(co)
             },
-            nested=flags & Flags.CO_NESTED,
-            generator=flags & Flags.CO_GENERATOR,
-            coroutine=flags & Flags.CO_COROUTINE,
-            iterable_coroutine=flags & Flags.CO_ITERABLE_COROUTINE,
-            new_locals=flags & Flags.CO_NEWLOCALS,
+            nested=flags & Flag.CO_NESTED,
+            generator=flags & Flag.CO_GENERATOR,
+            coroutine=flags & Flag.CO_COROUTINE,
+            iterable_coroutine=flags & Flag.CO_ITERABLE_COROUTINE,
+            new_locals=flags & Flag.CO_NEWLOCALS,
         )
 
     def to_pycode(self):
@@ -611,13 +611,13 @@ class Code:
     def is_nested(self):
         """Is this a nested code object?
         """
-        return bool(self._flags & Flags.CO_NESTED)
+        return bool(self._flags & Flag.CO_NESTED)
 
     @property
     def is_generator(self):
         """Is this a generator?
         """
-        return bool(self._flags & Flags.CO_GENERATOR)
+        return bool(self._flags & Flag.CO_GENERATOR)
 
     @property
     def is_coroutine(self):
@@ -625,7 +625,7 @@ class Code:
 
         This is 3.5 and greater.
         """
-        return bool(self._flags & Flags.CO_COROUTINE)
+        return bool(self._flags & Flag.CO_COROUTINE)
 
     @property
     def is_iterable_coroutine(self):
@@ -633,7 +633,7 @@ class Code:
 
         This is 3.5 and greater.
         """
-        return bool(self._flags & Flags.CO_ITERABLE_COROUTINE)
+        return bool(self._flags & Flag.CO_ITERABLE_COROUTINE)
 
     @property
     def constructs_new_locals(self):
@@ -643,7 +643,7 @@ class Code:
         needs a new locals dict each time; however, something like a module
         does not normally need new locals.
         """
-        return bool(self._flags & Flags.CO_NEWLOCALS)
+        return bool(self._flags & Flag.CO_NEWLOCALS)
 
     @property
     def filename(self):

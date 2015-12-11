@@ -7,7 +7,7 @@ import types
 from toolz import complement, compose, curry
 import toolz.curried.operator as op
 
-from .code import Code, Flags
+from .code import Code, Flag
 from . import instructions as instrs
 from .utils.functional import not_a, is_a
 from .utils.immutable import immutable
@@ -1296,10 +1296,10 @@ def paramnames(co):
     args = varnames[:argcount]
     kwonlyargs = varnames[argcount:total]
     varargs, varkwargs = None, None
-    if flags & Flags.CO_VARARGS:
+    if flags & Flag.CO_VARARGS:
         varargs = varnames[total]
         total += 1
-    if flags & Flags.CO_VARKEYWORDS:
+    if flags & Flag.CO_VARKEYWORDS:
         varkwargs = varnames[total]
 
     return args, kwonlyargs, varargs, varkwargs

@@ -289,7 +289,9 @@ def _call_repr(self):
 def _check_jmp_arg(self, arg):
     if not isinstance(arg, (Instruction, _RawArg)):
         raise TypeError(
-            '%s argument must be an instruction' % type(self).__name__,
+            'argument to %s must be an instruction, got: %r' % (
+                type(self).__name__, arg,
+            ),
         )
     if isinstance(arg, Instruction):
         arg._target_of.add(self)
@@ -298,7 +300,7 @@ def _check_jmp_arg(self, arg):
 
 class CompareOpMeta(InstructionMeta):
     @unique
-    class comparators(IntEnum):
+    class comparator(IntEnum):
         LT = 0
         LE = 1
         EQ = 2
@@ -310,17 +312,6 @@ class CompareOpMeta(InstructionMeta):
         IS = 8
         IS_NOT = 9
         EXCEPTION_MATCH = 10
-
-        @classmethod
-        def _resolve(cls, value):
-            if isinstance(value, cls):
-                return value
-            if isinstance(value, _RawArg):
-                value = value.value
-            for _, enum in cls.__members__.items():
-                if value == enum:
-                    return enum
-            raise ValueError('%r is not a valid Comparator' % value)
 
         def __repr__(self):
             return '<COMPARE_OP.%s.%s: %r>' % (
@@ -334,11 +325,13 @@ class CompareOpMeta(InstructionMeta):
         def __get__(self, instance, owner):
             if instance is None:
                 return self
+            # Must create new instances so that consumers can take ownership
+            # without worrying about other jumps targeting the new instruction.
             return instance(self._comparator)
 
-    for comparator in comparators:
-        locals()[comparator._name_] = ComparatorDescr(comparator)
-    del comparator
+    for c in comparator:
+        locals()[c._name_] = ComparatorDescr(c)
+    del c
     del ComparatorDescr
 
 
@@ -362,7 +355,7 @@ for name, opcode in opmap.items():
         class_.__repr__ = _call_repr
 
     if name == 'COMPARE_OP':
-        class_._normalize_arg = staticmethod(class_.comparators._resolve)
+        class_._normalize_arg = staticmethod(class_.comparator)
 
     if class_.is_jmp:
         class_._normalize_arg = _check_jmp_arg

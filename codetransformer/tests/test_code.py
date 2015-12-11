@@ -2,7 +2,7 @@ from itertools import product, chain
 import pytest
 import random
 
-from codetransformer.code import Code, Flags
+from codetransformer.code import Code, Flag
 from codetransformer.instructions import LOAD_CONST, LOAD_FAST
 
 
@@ -50,18 +50,18 @@ def test_lnotab_really_dumb_whitespace():
 
 def test_flag_packing():
     random.seed(8025816322119661921)  # ayy lmao
-    nflags = len(Flags.__members__)
+    nflags = len(Flag.__members__)
     cases = chain(
         random.sample(list(product((True, False), repeat=nflags)), 1000),
         [[True] * nflags],
         [[False] * nflags],
     )
     for flagvals in cases:
-        flags = dict(zip(Flags.__members__.keys(), flagvals))
-        assert Flags.unpack(Flags.pack(**flags)) == flags
+        flags = dict(zip(Flag.__members__.keys(), flagvals))
+        assert Flag.unpack(Flag.pack(**flags)) == flags
 
 
 def test_flag_unpack_too_big():
-    assert all(Flags.unpack(Flags.max).values())
+    assert all(Flag.unpack(Flag.max).values())
     with pytest.raises(ValueError):
-        Flags.unpack(Flags.max + 1)
+        Flag.unpack(Flag.max + 1)
