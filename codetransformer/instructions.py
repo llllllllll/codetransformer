@@ -296,6 +296,20 @@ def _check_jmp_arg(self, arg):
 
 
 class CompareOpMeta(InstructionMeta):
+    """
+    Special-case metaclass for the COMPARE_OP instruction type that provides
+    default constructors for the various kinds of comparisons.
+
+    These default constructors are implemented as descriptors so that we can
+    write::
+
+        new_compare = COMPARE_OP.LT
+
+    and have it be equivalent to::
+
+        new_compare = COMPARE_OP(COMPARE_OP.comparator.LT)
+    """
+
     @unique
     class comparator(IntEnum):
         LT = 0
@@ -316,16 +330,40 @@ class CompareOpMeta(InstructionMeta):
             )
 
     class ComparatorDescr:
-        def __init__(self, comparator):
-            self._comparator = comparator
+        """
+        A descriptor on the **metaclass** of COMPARE_OP that constructs new
+        instances of COMPARE_OP on attribute access.
+
+        Parameters
+        ----------
+        op : comparator
+            The element of the `comparator` enum that this descriptor will
+            forward to the COMPARE_OP constructor.
+        """
+        def __init__(self, op):
+            self._op = op
 
         def __get__(self, instance, owner):
-            if instance is None:
-                return self
-            # Must create new instances so that consumers can take ownership
-            # without worrying about other jumps targeting the new instruction.
-            return instance(self._comparator)
+            # Since this descriptor is added to the current metaclass,
+            # ``instance`` here is the COMPARE_OP **class**.
 
+            if instance is None:
+                # If someone does `CompareOpMeta.LT`, give them back the
+                # descriptor object itself.
+                return self
+
+            # If someone does `COMPARE_OP.LT`, return a **new instance** of
+            # COMPARE_OP.
+            # We create new instances so that consumers can take ownership
+            # without worrying about other jumps targeting the new instruction.
+            return instance(self._op)
+
+    # Dynamically add an instance of ComparatorDescr for each comparator
+    # opcode.
+    # This is equivalent to doing:
+    # LT = ComparatorDescr(comparator.LT)
+    # GT = ComparatorDescr(comparator.GT)
+    # ...
     for c in comparator:
         locals()[c._name_] = ComparatorDescr(c)
     del c
