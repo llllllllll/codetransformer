@@ -233,7 +233,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
 
         Notes
         -----
-        This is a seperate concept from instruction identity. Two seperate
+        This is a separate concept from instruction identity. Two seperate
         instructions can be equivalent without being the same exact instance.
         This means that two equivalent instructions can be at different points
         in the bytecode or be targeted by different jumps.
