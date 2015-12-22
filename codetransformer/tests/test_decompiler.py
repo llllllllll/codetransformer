@@ -222,7 +222,11 @@ def test_dict_literals():
     check("{a: b, c: d}")
     check("{1: 2, c: d}")
     check("{a: {b: c}, d: e}")
+
+    check("{a: {b: {c: d}, e: {f: g}}}")
+
     check("{a: {b: [c, d, e]}}")
+    check("a + {b: c}")
 
 
 def test_function_call():
