@@ -9,9 +9,14 @@ import toolz.curried.operator as op
 
 from .code import Code, Flag
 from . import instructions as instrs
-from .utils.functional import not_a, is_a
+from .utils.functional import not_a, is_a, moving_window
 from .utils.immutable import immutable
 from codetransformer import a as showa, d as showd  # noqa
+
+
+def _current_test():
+    from codetransformer.tests.test_decompiler import _current_test as ct
+    return ct
 
 
 class DecompilationError(Exception):
@@ -53,6 +58,9 @@ def instrs_to_body(instrs, context):
     """
     Convert a list of Instruction objects to a list of AST body nodes.
     """
+    for a, b in moving_window(2, instrs):
+        a._next_target_of = b._target_of
+
     stack = []
     body = []
     process_instrs(instrs, stack, body, context)
@@ -105,6 +113,29 @@ def _process_jump(instr, queue, stack, body, context):
         raise DecompilationError(
             "Don't know how to decompile `and`/`or`/`ternary` exprs."
         )
+
+
+# @_process_instr.register(instrs.JUMP_IF_TRUE_OR_POP)
+# def _process_or(instr, queue, stack, body, context):
+#     """
+#     Make an expression of the form ``<expr> or <expr>``
+#     """
+#     # The leftmost expression in the or
+#     import pdb; pdb.set_trace()
+#     lhs = make_expr(stack)
+
+#     rhs_builders = popwhile(op.is_not(instr.arg), queue, side='left')
+#     rhs_builders.appendleft(instr)
+
+#     while rhs_builders:
+#         cur_jump = rhs_builders.popleft()
+#         expr_builders = popwhile(
+#             lambda i: not i.equiv(cur_jump),
+#             rhs_builders,
+#             side='left'
+#         )
+#         import pdb; pdb.set_trace()
+#         x = 3
 
 
 def make_if_statement(instr, queue, stack, context):
@@ -294,6 +325,7 @@ def make_importfrom_alias(queue, body, context, name):
 @_process_instr.register(instrs.CALL_FUNCTION_KW)
 @_process_instr.register(instrs.CALL_FUNCTION_VAR_KW)
 @_process_instr.register(instrs.BUILD_SLICE)
+@_process_instr.register(instrs.JUMP_IF_TRUE_OR_POP)
 def _push(instr, queue, stack, body, context):
     """
     Just push these instructions onto the stack for further processing
@@ -429,9 +461,7 @@ def _store_subscr(instr, queue, stack, body, context):
 
 @_process_instr.register(instrs.POP_TOP)
 def _pop(instr, queue, stack, body, context):
-    body.append(
-        ast.Expr(value=make_expr(pop_arguments(instr, stack)))
-    )
+    body.append(ast.Expr(value=make_expr(stack)))
 
 
 @_process_instr.register(instrs.RETURN_VALUE)
@@ -1143,6 +1173,57 @@ def _binop_handler(nodetype):
 for instrtype, nodetype in binops:
     _process_instr.register(instrtype)(_push)
     _make_expr.register(instrtype)(_binop_handler(nodetype))
+
+
+def _make_expr(toplevel, stack_builders, _real_make_expr=_make_expr):
+    """
+    Override the single-dispatched make_expr with wrapper logic for handling
+    short-circuiting expressions.
+    """
+    base_expr = _real_make_expr(toplevel, stack_builders)
+    if not toplevel._next_target_of:
+        return base_expr
+
+    subexprs = deque([base_expr])
+    while stack_builders and stack_builders[-1] in toplevel._next_target_of:
+        jump = stack_builders.pop()
+        if not jump.is_jmp:
+            raise DecompilationError(
+                "Expected a JUMP instruction, got %s." % jump,
+            )
+        elif not isinstance(jump, instrs.JUMP_IF_TRUE_OR_POP):
+            raise DecompilationError(
+                "Don't know how to decompile %s inside expression." % jump,
+            )
+        subexprs.appendleft(make_expr(stack_builders))
+
+    if len(subexprs) <= 1:
+        raise DecompilationError(
+            "Expected at least one JUMP instruction before expression."
+        )
+
+    return normalize_boolop(
+        ast.BoolOp(
+            op=ast.Or(),
+            values=list(subexprs),
+        )
+    )
+
+
+def normalize_boolop(expr):
+    """
+    Normalize a boolop by folding together nested And/Or exprs.
+    """
+    optype = expr.op
+    newvalues = []
+    for subexpr in expr.values:
+        if not isinstance(subexpr, ast.BoolOp) or subexpr.op != optype:
+            newvalues.append(subexpr)
+        else:
+            # Normalize subexpression, then inline its values into the
+            # top-level subexpr.
+            newvalues.extend(normalize_boolop(subexpr).values)
+    return ast.BoolOp(op=optype, values=newvalues)
 
 
 def make_function(function_builders, *, closure):

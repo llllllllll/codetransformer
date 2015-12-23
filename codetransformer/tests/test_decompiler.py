@@ -12,6 +12,9 @@ from codetransformer import a as show  # noqa
 from ..decompiler import DecompilationContext, paramnames, pycode_to_body
 
 
+_current_test = None
+
+
 def make_indented_body(body_str):
     """
     Helper for generating an indented string to use as the body of a function.
@@ -51,6 +54,9 @@ def check(text, ast_text=None):
     calling ast.parse on `ast_text`.  If `ast_text` is not passed, use `text`
     for both.
     """
+    global _current_test
+    _current_test = text
+
     if ast_text is None:
         ast_text = text
 
@@ -801,3 +807,27 @@ def test_if_elif(last_statement, prefix):
             """
         ).format(prefix=prefix, last_statement=last_statement)
     )
+
+
+def test_or():
+    check("a or b")
+    check("a or b or c")
+    check("a + (b or c)")
+    check("(a or b) + c")
+    check("(a + b) or (c + d)")
+    check("a + (b or c) + d")
+
+    check("a or (1 + (b or c))")
+
+
+def test_normalize_nested_ors():
+    # These generate identical bytecode, but they're different at the AST
+    # level.  We normalize to minimally-nested form.
+    check("a or (b or c)", "a or b or c")
+    check("(a or b) or c", "a or b or c")
+
+    check("a or (b or (c or d))", "a or b or c or d")
+    check("((a or b) or c) or d", "a or b or c or d")
+
+    check("(a or b) or (c or d)", "a or b or c or d")
+    check("a or (b or c) or d", "a or b or c or d")
