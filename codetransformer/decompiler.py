@@ -48,19 +48,25 @@ def pycode_to_body(co, context):
     Convert a Python code object to a list of AST body elements.
     """
     code = Code.from_pycode(co)
-    body = instrs_to_body(deque(code.instrs), context)
-    if context.in_function:
-        return make_global_and_nonlocal_decls(code.instrs) + body
-    return body
+
+    for a, b in moving_window(2, code.instrs):
+        a._next_target_of = b._target_of
+    b._next_target_of = set()
+
+    try:
+        body = instrs_to_body(deque(code.instrs), context)
+        if context.in_function:
+            return make_global_and_nonlocal_decls(code.instrs) + body
+        return body
+    finally:
+        for i in code.instrs:
+            del i._next_target_of
 
 
 def instrs_to_body(instrs, context):
     """
     Convert a list of Instruction objects to a list of AST body nodes.
     """
-    for a, b in moving_window(2, instrs):
-        a._next_target_of = b._target_of
-
     stack = []
     body = []
     process_instrs(instrs, stack, body, context)
@@ -113,29 +119,6 @@ def _process_jump(instr, queue, stack, body, context):
         raise DecompilationError(
             "Don't know how to decompile `and`/`or`/`ternary` exprs."
         )
-
-
-# @_process_instr.register(instrs.JUMP_IF_TRUE_OR_POP)
-# def _process_or(instr, queue, stack, body, context):
-#     """
-#     Make an expression of the form ``<expr> or <expr>``
-#     """
-#     # The leftmost expression in the or
-#     import pdb; pdb.set_trace()
-#     lhs = make_expr(stack)
-
-#     rhs_builders = popwhile(op.is_not(instr.arg), queue, side='left')
-#     rhs_builders.appendleft(instr)
-
-#     while rhs_builders:
-#         cur_jump = rhs_builders.popleft()
-#         expr_builders = popwhile(
-#             lambda i: not i.equiv(cur_jump),
-#             rhs_builders,
-#             side='left'
-#         )
-#         import pdb; pdb.set_trace()
-#         x = 3
 
 
 def make_if_statement(instr, queue, stack, context):
@@ -326,6 +309,7 @@ def make_importfrom_alias(queue, body, context, name):
 @_process_instr.register(instrs.CALL_FUNCTION_VAR_KW)
 @_process_instr.register(instrs.BUILD_SLICE)
 @_process_instr.register(instrs.JUMP_IF_TRUE_OR_POP)
+@_process_instr.register(instrs.JUMP_IF_FALSE_OR_POP)
 def _push(instr, queue, stack, body, context):
     """
     Just push these instructions onto the stack for further processing
@@ -1175,6 +1159,13 @@ for instrtype, nodetype in binops:
     _make_expr.register(instrtype)(_binop_handler(nodetype))
 
 
+_BOOLOP_JUMP_TO_AST_OP = {
+    instrs.JUMP_IF_TRUE_OR_POP: ast.Or,
+    instrs.JUMP_IF_FALSE_OR_POP: ast.And,
+}
+_BOOLOP_JUMP_TYPES = tuple(_BOOLOP_JUMP_TO_AST_OP)
+
+
 def _make_expr(toplevel, stack_builders, _real_make_expr=_make_expr):
     """
     Override the single-dispatched make_expr with wrapper logic for handling
@@ -1185,29 +1176,39 @@ def _make_expr(toplevel, stack_builders, _real_make_expr=_make_expr):
         return base_expr
 
     subexprs = deque([base_expr])
+    ops = deque([])
     while stack_builders and stack_builders[-1] in toplevel._next_target_of:
         jump = stack_builders.pop()
-        if not jump.is_jmp:
-            raise DecompilationError(
-                "Expected a JUMP instruction, got %s." % jump,
-            )
-        elif not isinstance(jump, instrs.JUMP_IF_TRUE_OR_POP):
+        if not isinstance(jump, _BOOLOP_JUMP_TYPES):
             raise DecompilationError(
                 "Don't know how to decompile %s inside expression." % jump,
             )
         subexprs.appendleft(make_expr(stack_builders))
+        ops.appendleft(_BOOLOP_JUMP_TO_AST_OP[type(jump)]())
 
     if len(subexprs) <= 1:
         raise DecompilationError(
             "Expected at least one JUMP instruction before expression."
         )
 
-    return normalize_boolop(
-        ast.BoolOp(
-            op=ast.Or(),
-            values=list(subexprs),
+    return normalize_boolop(make_boolop(subexprs, ops))
+
+
+def make_boolop(exprs, op_types):
+    """
+    Parameters
+    ----------
+    exprs : deque
+    op_types : deque[{ast.And, ast.Or}]
+    """
+    if len(op_types) > 1:
+        return ast.BoolOp(
+            op=op_types.popleft(),
+            values=[exprs.popleft(), make_boolop(exprs, op_types)],
         )
-    )
+
+    assert len(exprs) == 2
+    return ast.BoolOp(op=op_types.popleft(), values=list(exprs))
 
 
 def normalize_boolop(expr):
@@ -1217,8 +1218,10 @@ def normalize_boolop(expr):
     optype = expr.op
     newvalues = []
     for subexpr in expr.values:
-        if not isinstance(subexpr, ast.BoolOp) or subexpr.op != optype:
+        if not isinstance(subexpr, ast.BoolOp):
             newvalues.append(subexpr)
+        elif type(subexpr.op) != type(optype):
+            newvalues.append(normalize_boolop(subexpr))
         else:
             # Normalize subexpression, then inline its values into the
             # top-level subexpr.

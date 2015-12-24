@@ -2,6 +2,7 @@
 Tests for decompiler.py
 """
 from ast import AST, iter_fields, Module, parse
+from functools import partial
 from itertools import product, zip_longest, combinations_with_replacement
 from textwrap import dedent
 
@@ -72,6 +73,14 @@ def check(text, ast_text=None):
     )
 
     compare(decompiled_ast, ast)
+
+
+def check_formatted(text, ast_text=None, **fmt_kwargs):
+    text = text.format(**fmt_kwargs)
+    if ast_text is not None:
+        ast_text = ast_text.format(**fmt_kwargs)
+    check(text, ast_text)
+
 
 # Bodies for for/while loops.
 LOOP_BODIES = tuple(map(
@@ -809,25 +818,39 @@ def test_if_elif(last_statement, prefix):
     )
 
 
-def test_or():
-    check("a or b")
-    check("a or b or c")
-    check("a + (b or c)")
-    check("(a or b) + c")
-    check("(a + b) or (c + d)")
-    check("a + (b or c) + d")
+@pytest.mark.parametrize(
+    'op', ['and', 'or'],
+)
+def test_boolops(op):
+    check_ = partial(check_formatted, op=op)
 
-    check("a or (1 + (b or c))")
+    check_("a {op} b")
+    check_("a {op} b {op} c")
+    check_("a + (b {op} c)")
+    check_("(a {op} b) + c")
+    check_("(a + b) {op} (c + d)")
+    check_("a + (b {op} c) + d")
+
+    check_("a {op} (1 + (b {op} c))")
 
 
-def test_normalize_nested_ors():
+@pytest.mark.parametrize(
+    'op', ['and', 'or'],
+)
+def test_normalize_nested_boolops(op):
+    check_ = partial(check_formatted, op=op)
+
     # These generate identical bytecode, but they're different at the AST
     # level.  We normalize to minimally-nested form.
-    check("a or (b or c)", "a or b or c")
-    check("(a or b) or c", "a or b or c")
+    check_("a {op} (b {op} c)", "a {op} b {op} c")
+    check_("(a {op} b) {op} c", "a {op} b {op} c")
 
-    check("a or (b or (c or d))", "a or b or c or d")
-    check("((a or b) or c) or d", "a or b or c or d")
+    check_("a {op} (b {op} (c {op} d))", "a {op} b {op} c {op} d")
+    check_("((a {op} b) {op} c) {op} d", "a {op} b {op} c {op} d")
 
-    check("(a or b) or (c or d)", "a or b or c or d")
-    check("a or (b or c) or d", "a or b or c or d")
+    check_("(a {op} b) {op} (c {op} d)", "a {op} b {op} c {op} d")
+    check_("a {op} (b {op} c) {op} d", "a {op} b {op} c {op} d")
+
+
+def test_mixed_boolops():
+    check("a or b and c and d")
