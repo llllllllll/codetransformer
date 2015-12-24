@@ -44,6 +44,9 @@ def pycode_to_body(co, context):
     """
     code = Code.from_pycode(co)
 
+    # On each instruction, temporarily store all the jumps to the **next**
+    # instruction.  This is used in _make_expr to determine when an expression
+    # is part of a short-circuiting expression.
     for a, b in sliding_window(2, code.instrs):
         a._next_target_of = b._target_of
     b._next_target_of = set()
@@ -54,6 +57,7 @@ def pycode_to_body(co, context):
             return make_global_and_nonlocal_decls(code.instrs) + body
         return body
     finally:
+        # Clean up jump target data.
         for i in code.instrs:
             del i._next_target_of
 
