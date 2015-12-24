@@ -2,6 +2,7 @@
 Tests for decompiler.py
 """
 from ast import AST, iter_fields, Module, parse
+from functools import partial
 from itertools import product, zip_longest, combinations_with_replacement
 from textwrap import dedent
 
@@ -10,6 +11,9 @@ from toolz.curried.operator import add
 
 from codetransformer import a as show  # noqa
 from ..decompiler import DecompilationContext, paramnames, pycode_to_body
+
+
+_current_test = None
 
 
 def make_indented_body(body_str):
@@ -51,6 +55,9 @@ def check(text, ast_text=None):
     calling ast.parse on `ast_text`.  If `ast_text` is not passed, use `text`
     for both.
     """
+    global _current_test
+    _current_test = text
+
     if ast_text is None:
         ast_text = text
 
@@ -66,6 +73,14 @@ def check(text, ast_text=None):
     )
 
     compare(decompiled_ast, ast)
+
+
+def check_formatted(text, ast_text=None, **fmt_kwargs):
+    text = text.format(**fmt_kwargs)
+    if ast_text is not None:
+        ast_text = ast_text.format(**fmt_kwargs)
+    check(text, ast_text)
+
 
 # Bodies for for/while loops.
 LOOP_BODIES = tuple(map(
@@ -801,3 +816,41 @@ def test_if_elif(last_statement, prefix):
             """
         ).format(prefix=prefix, last_statement=last_statement)
     )
+
+
+@pytest.mark.parametrize(
+    'op', ['and', 'or'],
+)
+def test_boolops(op):
+    check_ = partial(check_formatted, op=op)
+
+    check_("a {op} b")
+    check_("a {op} b {op} c")
+    check_("a + (b {op} c)")
+    check_("(a {op} b) + c")
+    check_("(a + b) {op} (c + d)")
+    check_("a + (b {op} c) + d")
+
+    check_("a {op} (1 + (b {op} c))")
+
+
+@pytest.mark.parametrize(
+    'op', ['and', 'or'],
+)
+def test_normalize_nested_boolops(op):
+    check_ = partial(check_formatted, op=op)
+
+    # These generate identical bytecode, but they're different at the AST
+    # level.  We normalize to minimally-nested form.
+    check_("a {op} (b {op} c)", "a {op} b {op} c")
+    check_("(a {op} b) {op} c", "a {op} b {op} c")
+
+    check_("a {op} (b {op} (c {op} d))", "a {op} b {op} c {op} d")
+    check_("((a {op} b) {op} c) {op} d", "a {op} b {op} c {op} d")
+
+    check_("(a {op} b) {op} (c {op} d)", "a {op} b {op} c {op} d")
+    check_("a {op} (b {op} c) {op} d", "a {op} b {op} c {op} d")
+
+
+def test_mixed_boolops():
+    check("a or b and c and d")

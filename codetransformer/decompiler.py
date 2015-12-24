@@ -4,7 +4,7 @@ from functools import singledispatch
 from itertools import takewhile
 import types
 
-from toolz import complement, compose, curry
+from toolz import complement, compose, curry, sliding_window
 import toolz.curried.operator as op
 
 from .code import Code, Flag
@@ -43,10 +43,23 @@ def pycode_to_body(co, context):
     Convert a Python code object to a list of AST body elements.
     """
     code = Code.from_pycode(co)
-    body = instrs_to_body(deque(code.instrs), context)
-    if context.in_function:
-        return make_global_and_nonlocal_decls(code.instrs) + body
-    return body
+
+    # On each instruction, temporarily store all the jumps to the **next**
+    # instruction.  This is used in _make_expr to determine when an expression
+    # is part of a short-circuiting expression.
+    for a, b in sliding_window(2, code.instrs):
+        a._next_target_of = b._target_of
+    b._next_target_of = set()
+
+    try:
+        body = instrs_to_body(deque(code.instrs), context)
+        if context.in_function:
+            return make_global_and_nonlocal_decls(code.instrs) + body
+        return body
+    finally:
+        # Clean up jump target data.
+        for i in code.instrs:
+            del i._next_target_of
 
 
 def instrs_to_body(instrs, context):
@@ -294,6 +307,8 @@ def make_importfrom_alias(queue, body, context, name):
 @_process_instr.register(instrs.CALL_FUNCTION_KW)
 @_process_instr.register(instrs.CALL_FUNCTION_VAR_KW)
 @_process_instr.register(instrs.BUILD_SLICE)
+@_process_instr.register(instrs.JUMP_IF_TRUE_OR_POP)
+@_process_instr.register(instrs.JUMP_IF_FALSE_OR_POP)
 def _push(instr, queue, stack, body, context):
     """
     Just push these instructions onto the stack for further processing
@@ -429,9 +444,7 @@ def _store_subscr(instr, queue, stack, body, context):
 
 @_process_instr.register(instrs.POP_TOP)
 def _pop(instr, queue, stack, body, context):
-    body.append(
-        ast.Expr(value=make_expr(pop_arguments(instr, stack)))
-    )
+    body.append(ast.Expr(value=make_expr(stack)))
 
 
 @_process_instr.register(instrs.RETURN_VALUE)
@@ -755,14 +768,84 @@ def make_expr(stack_builders):
     return _make_expr(stack_builders.pop(), stack_builders)
 
 
-@singledispatch
+_BOOLOP_JUMP_TO_AST_OP = {
+    instrs.JUMP_IF_TRUE_OR_POP: ast.Or,
+    instrs.JUMP_IF_FALSE_OR_POP: ast.And,
+}
+_BOOLOP_JUMP_TYPES = tuple(_BOOLOP_JUMP_TO_AST_OP)
+
+
 def _make_expr(toplevel, stack_builders):
+    """
+    Override the single-dispatched make_expr with wrapper logic for handling
+    short-circuiting expressions.
+    """
+    base_expr = _make_expr_internal(toplevel, stack_builders)
+    if not toplevel._next_target_of:
+        return base_expr
+
+    subexprs = deque([base_expr])
+    ops = deque([])
+    while stack_builders and stack_builders[-1] in toplevel._next_target_of:
+        jump = stack_builders.pop()
+        if not isinstance(jump, _BOOLOP_JUMP_TYPES):
+            raise DecompilationError(
+                "Don't know how to decompile %s inside expression." % jump,
+            )
+        subexprs.appendleft(make_expr(stack_builders))
+        ops.appendleft(_BOOLOP_JUMP_TO_AST_OP[type(jump)]())
+
+    if len(subexprs) <= 1:
+        raise DecompilationError(
+            "Expected at least one JUMP instruction before expression."
+        )
+
+    return normalize_boolop(make_boolop(subexprs, ops))
+
+
+def make_boolop(exprs, op_types):
+    """
+    Parameters
+    ----------
+    exprs : deque
+    op_types : deque[{ast.And, ast.Or}]
+    """
+    if len(op_types) > 1:
+        return ast.BoolOp(
+            op=op_types.popleft(),
+            values=[exprs.popleft(), make_boolop(exprs, op_types)],
+        )
+
+    assert len(exprs) == 2
+    return ast.BoolOp(op=op_types.popleft(), values=list(exprs))
+
+
+def normalize_boolop(expr):
+    """
+    Normalize a boolop by folding together nested And/Or exprs.
+    """
+    optype = expr.op
+    newvalues = []
+    for subexpr in expr.values:
+        if not isinstance(subexpr, ast.BoolOp):
+            newvalues.append(subexpr)
+        elif type(subexpr.op) != type(optype):
+            newvalues.append(normalize_boolop(subexpr))
+        else:
+            # Normalize subexpression, then inline its values into the
+            # top-level subexpr.
+            newvalues.extend(normalize_boolop(subexpr).values)
+    return ast.BoolOp(op=optype, values=newvalues)
+
+
+@singledispatch
+def _make_expr_internal(toplevel, stack_builders):
     raise DecompilationError(
         "Don't know how to build expression for %s" % toplevel
     )
 
 
-@_make_expr.register(instrs.UNARY_NOT)
+@_make_expr_internal.register(instrs.UNARY_NOT)
 def _make_expr_unary_not(toplevel, stack_builders):
     return ast.UnaryOp(
         op=ast.Not(),
@@ -770,7 +853,7 @@ def _make_expr_unary_not(toplevel, stack_builders):
     )
 
 
-@_make_expr.register(instrs.CALL_FUNCTION)
+@_make_expr_internal.register(instrs.CALL_FUNCTION)
 def _make_expr_call_function(toplevel, stack_builders):
     keywords = make_call_keywords(stack_builders, toplevel.keyword)
     positionals = make_call_positionals(stack_builders, toplevel.positional)
@@ -783,7 +866,7 @@ def _make_expr_call_function(toplevel, stack_builders):
     )
 
 
-@_make_expr.register(instrs.CALL_FUNCTION_VAR)
+@_make_expr_internal.register(instrs.CALL_FUNCTION_VAR)
 def _make_expr_call_function_var(toplevel, stack_builders):
     starargs = make_expr(stack_builders)
     keywords = make_call_keywords(stack_builders, toplevel.keyword)
@@ -797,7 +880,7 @@ def _make_expr_call_function_var(toplevel, stack_builders):
     )
 
 
-@_make_expr.register(instrs.CALL_FUNCTION_KW)
+@_make_expr_internal.register(instrs.CALL_FUNCTION_KW)
 def _make_expr_call_function_kw(toplevel, stack_builders):
     kwargs = make_expr(stack_builders)
     keywords = make_call_keywords(stack_builders, toplevel.keyword)
@@ -811,7 +894,7 @@ def _make_expr_call_function_kw(toplevel, stack_builders):
     )
 
 
-@_make_expr.register(instrs.CALL_FUNCTION_VAR_KW)
+@_make_expr_internal.register(instrs.CALL_FUNCTION_VAR_KW)
 def _make_expr_call_function_var_kw(toplevel, stack_builders):
     kwargs = make_expr(stack_builders)
     starargs = make_expr(stack_builders)
@@ -856,7 +939,7 @@ def make_call_positionals(stack_builders, count):
     return out
 
 
-@_make_expr.register(instrs.BUILD_TUPLE)
+@_make_expr_internal.register(instrs.BUILD_TUPLE)
 def _make_expr_tuple(toplevel, stack_builders):
     return ast.Tuple(
         ctx=ast.Load(),
@@ -864,7 +947,7 @@ def _make_expr_tuple(toplevel, stack_builders):
     )
 
 
-@_make_expr.register(instrs.BUILD_SET)
+@_make_expr_internal.register(instrs.BUILD_SET)
 def _make_expr_set(toplevel, stack_builders):
     return ast.Set(
         ctx=ast.Load(),
@@ -872,7 +955,7 @@ def _make_expr_set(toplevel, stack_builders):
     )
 
 
-@_make_expr.register(instrs.BUILD_LIST)
+@_make_expr_internal.register(instrs.BUILD_LIST)
 def _make_expr_list(toplevel, stack_builders):
     return ast.List(
         ctx=ast.Load(),
@@ -891,7 +974,7 @@ def make_exprs(stack_builders, count):
     return exprs
 
 
-@_make_expr.register(instrs.BUILD_MAP)
+@_make_expr_internal.register(instrs.BUILD_MAP)
 def _make_expr_empty_dict(toplevel, stack_builders):
     """
     This should only be hit for empty dicts.  Anything else should hit the
@@ -909,7 +992,7 @@ def _make_expr_empty_dict(toplevel, stack_builders):
     return ast.Dict(keys=[], values=[])
 
 
-@_make_expr.register(instrs.STORE_MAP)
+@_make_expr_internal.register(instrs.STORE_MAP)
 def _make_expr_dict(toplevel, stack_builders):
 
     # Push toplevel back onto the stack so that it gets correctly consumed by
@@ -975,16 +1058,16 @@ def _make_dict_elems(build_instr, builders):
     return keys, values
 
 
-@_make_expr.register(instrs.LOAD_DEREF)
-@_make_expr.register(instrs.LOAD_NAME)
-@_make_expr.register(instrs.LOAD_CLOSURE)
-@_make_expr.register(instrs.LOAD_FAST)
-@_make_expr.register(instrs.LOAD_GLOBAL)
+@_make_expr_internal.register(instrs.LOAD_DEREF)
+@_make_expr_internal.register(instrs.LOAD_NAME)
+@_make_expr_internal.register(instrs.LOAD_CLOSURE)
+@_make_expr_internal.register(instrs.LOAD_FAST)
+@_make_expr_internal.register(instrs.LOAD_GLOBAL)
 def _make_expr_name(toplevel, stack_builders):
     return ast.Name(id=toplevel.arg, ctx=ast.Load())
 
 
-@_make_expr.register(instrs.LOAD_ATTR)
+@_make_expr_internal.register(instrs.LOAD_ATTR)
 def _make_expr_attr(toplevel, stack_builders):
     return ast.Attribute(
         value=make_expr(stack_builders),
@@ -993,7 +1076,7 @@ def _make_expr_attr(toplevel, stack_builders):
     )
 
 
-@_make_expr.register(instrs.BINARY_SUBSCR)
+@_make_expr_internal.register(instrs.BINARY_SUBSCR)
 def _make_expr_getitem(toplevel, stack_builders):
     slice_ = make_slice(stack_builders)
     value = make_expr(stack_builders)
@@ -1050,7 +1133,7 @@ def normalize_tuple_slice(node):
     )
 
 
-@_make_expr.register(instrs.BUILD_SLICE)
+@_make_expr_internal.register(instrs.BUILD_SLICE)
 def _make_expr_build_slice(toplevel, stack_builders):
     # Arg is always either 2 or 3.  If it's 3, then the first expression is the
     # step value.
@@ -1075,7 +1158,7 @@ def _make_expr_build_slice(toplevel, stack_builders):
     return ast.Slice(lower=lower, upper=upper, step=step)
 
 
-@_make_expr.register(instrs.LOAD_CONST)
+@_make_expr_internal.register(instrs.LOAD_CONST)
 def _make_expr_const(toplevel, stack_builders):
     return _make_const(toplevel.arg)
 
@@ -1142,7 +1225,7 @@ def _binop_handler(nodetype):
 
 for instrtype, nodetype in binops:
     _process_instr.register(instrtype)(_push)
-    _make_expr.register(instrtype)(_binop_handler(nodetype))
+    _make_expr_internal.register(instrtype)(_binop_handler(nodetype))
 
 
 def make_function(function_builders, *, closure):
@@ -1479,3 +1562,15 @@ def popwhile(cond, queue, *, side):
             break
         pushnext(popnext())
     return out
+
+
+def _current_test():
+    """
+    Get the string passed to the currently running call to
+    `test_decompiler.check.`
+
+    This is intended for use in debugging tests.  It should never be called in
+    real code.
+    """
+    from codetransformer.tests.test_decompiler import _current_test as ct
+    return ct
