@@ -4,12 +4,12 @@ from functools import singledispatch
 from itertools import takewhile
 import types
 
-from toolz import complement, compose, curry
+from toolz import complement, compose, curry, sliding_window
 import toolz.curried.operator as op
 
 from .code import Code, Flag
 from . import instructions as instrs
-from .utils.functional import not_a, is_a, moving_window
+from .utils.functional import not_a, is_a
 from .utils.immutable import immutable
 from codetransformer import a as showa, d as showd  # noqa
 
@@ -49,7 +49,7 @@ def pycode_to_body(co, context):
     """
     code = Code.from_pycode(co)
 
-    for a, b in moving_window(2, code.instrs):
+    for a, b in sliding_window(2, code.instrs):
         a._next_target_of = b._target_of
     b._next_target_of = set()
 

@@ -1,5 +1,3 @@
-from collections import deque
-from itertools import islice
 from toolz import complement, flip
 
 
@@ -89,24 +87,3 @@ def ffill(iterable):
         else:
             previous = e
             yield e
-
-
-def moving_window(n, iterable):
-    """
-    Generate n-tuples of elements yielded by ``iterator``.
-
-    Example
-    -------
-    >>> list(moving_window(2, range(5)))
-    [(0, 1), (1, 2), (2, 3), (3, 4)]
-    """
-    iterator = iter(iterable)
-    to_yield = deque(islice(iterator, n))
-    if len(to_yield) < n:
-        raise ValueError("Iterator only yielded %d elements." % len(to_yield))
-
-    yield tuple(to_yield)
-    while True:
-        to_yield.popleft()
-        to_yield.append(next(iterator))
-        yield tuple(to_yield)
