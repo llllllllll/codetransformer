@@ -14,11 +14,6 @@ from .utils.immutable import immutable
 from codetransformer import a as showa, d as showd  # noqa
 
 
-def _current_test():
-    from codetransformer.tests.test_decompiler import _current_test as ct
-    return ct
-
-
 class DecompilationError(Exception):
     pass
 
@@ -1563,3 +1558,15 @@ def popwhile(cond, queue, *, side):
             break
         pushnext(popnext())
     return out
+
+
+def _current_test():
+    """
+    Get the string passed to the currently running call to
+    `test_decompiler.check.`
+
+    This is intended for use in debugging tests.  It should never be called in
+    real code.
+    """
+    from codetransformer.tests.test_decompiler import _current_test as ct
+    return ct
