@@ -15,7 +15,7 @@ between the programmer and the raw bytes read by the eval loop so that we can
 more easily inspect and modify bytecode.
 
 ``codetransformer`` is motivated by the need to override parts of the python
-language that is not already hooked into through data model methods. For example:
+language that are not already hooked into through data model methods. For example:
 
 * Override the ``is`` and ``not`` operators.
 * Custom data structure literals.
