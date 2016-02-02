@@ -15,16 +15,15 @@ between the programmer and the raw bytes read by the eval loop so that we can
 more easily inspect and modify bytecode.
 
 ``codetransformer`` is motivated by the need to override parts of the python
-language that not already hooked into through data model methods. For example:
+language that are not already hooked into through data model methods. For example:
 
 * Override the ``is`` and ``not`` operators.
 * Custom data structure literals.
-* Syntax features that can not be represented with valid python AST or source.
+* Syntax features that cannot be represented with valid python AST or source.
 * Run without a modified CPython interpreter.
 
-``codetransformer`` was originally developed as part of lazy_ to implement the
-transformations needed to override the code objects at runtime.
-
+``codetransformer`` was originally developed as part of lazy_ to implement
+the transformations needed to override the code objects at runtime.
 
 Example Uses
 ------------
@@ -74,7 +73,6 @@ objects. These objects support arbitrary precision arithmetic.
    >>> f()
    Decimal('1.5')
 
-
 Pattern Matched Exceptions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -82,7 +80,7 @@ Pattern matched exceptions are a good example of a ``CodeTransformer`` that
 would be very complicated to implement at the AST level. This transformation
 extends the ``try/except`` syntax to accept instances of ``BaseException`` as
 well subclasses of ``BaseException``. When excepting an instance, the ``args``
-of the exception will be compared for equality to detirmine of the exception
+of the exception will be compared for equality to determine which exception
 handler should be invoked. For example:
 
 .. code-block:: python
@@ -100,7 +98,7 @@ handler should be invoked. For example:
 
 This function raises an instance of ``ValueError`` and attempts to catch it. The
 first check looks for instances of ``ValueError`` that were constructed with an
-argument of ``'buzz``. Because our custom exception is raised with ``'bar'``,
+argument of ``'buzz'``. Because our custom exception is raised with ``'bar'``,
 these are not equal and we do not enter this handler. The next handler looks for
 ``ValueError('bar')`` which does match the exception we raised. We then enter
 this block and normal python rules take over.
@@ -129,7 +127,6 @@ This matches on when the match expression is greater in value than the first
 argument of any exception type that is raised. This particular behavior would be
 very hard to mimic through AST level transformations.
 
-
 Core Abstractions
 -----------------
 
@@ -140,7 +137,6 @@ The three core abstractions of ``codetransformer`` are:
 2. The ``Code`` object which represents a collection of ``Instruction``\s.
 3. The ``CodeTransformer`` object which represents a set of rules for
    manipulating ``Code`` objects.
-
 
 Instructions
 ~~~~~~~~~~~~
@@ -188,10 +184,10 @@ The ``codetransformer`` abstraction is designed to make it easy to dynamically
 construct and inspect these objects. This allows us to easy set things like the
 argument names, and manipulate the line number mappings.
 
-The ``Code`` object provides methods for converting to and from python's code
+The ``Code`` object provides methods for converting to and from Python's code
 representation:
 
-1. ``from_pythode``
+1. ``from_pycode``
 2. ``to_pycode``.
 
 This allows us to take an existing function, parse the meaning from it, modify
@@ -201,7 +197,6 @@ it, and then assemble this back into a new python code object.
 
    ``Code`` objects are immutable. When we say "modify", we mean create a copy
    with different values.
-
 
 CodeTransformers
 ----------------
@@ -234,9 +229,8 @@ a single instruction that emits a ``LOAD_FAST`` (local name lookup) that is the
 result of adding the two names together. We then steal any jumps that used to
 target the first ``LOAD_GLOBAL``.
 
-We can execute this transformer by
-calling an instance of it on a function object, or using it like a
-decorator. For example:
+We can execute this transformer by calling an instance of it on a
+function object, or using it like a decorator. For example:
 
 .. code-block:: python
 
