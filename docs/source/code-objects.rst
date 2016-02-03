@@ -52,7 +52,7 @@ representation.
 Let's say that we want to replace the addition operation in our ``add2``
 function with a multiplication. We could try to mutate our
 :class:`~codetransformer.code.Code` object directly before converting back to
-Python bytecode, but there are many subtle invariants [#f1] between the
+Python bytecode, but there are many subtle invariants [#f1]_ between the
 instructions and the other pieces of metadata that must be maintained to ensure
 that the generated output can be executed correctly.
 
@@ -81,8 +81,8 @@ replacements. It is often convenient to implement transformer methods as
 `generator functions`_, as we've done here.
 
 In this example, we've supplied the simplest possible pattern: a single
-instruction type to match. [#f2] Our transformer method will be called on every
-``BINARY_ADD`` instruction in the target code object, and it will yield a
+instruction type to match. [#f2]_ Our transformer method will be called on
+every ``BINARY_ADD`` instruction in the target code object, and it will yield a
 ``BINARY_MULTIPLY`` as replacement each time.
 
 Applying Transformers
