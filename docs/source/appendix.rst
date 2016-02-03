@@ -20,26 +20,12 @@ API Reference
 ``codetransformer.instructions``
 --------------------------------
 
+For details on particular instructions, see `the dis stdlib module docs.`_
+
 .. automodule:: codetransformer.instructions
    :members:
    :undoc-members:
-   :exclude-members: Instruction
 
-.. py:class:: Instruction
-
-   Base class for all Instructions.
-
-   For details on particular instructions, see `the dis stdlib module docs.`_
-
-   .. automethod:: from_bytes
-   .. automethod:: from_opcode
-
-   .. automethod:: steal
-   .. automethod:: equiv
-
-   .. autoattribute:: stack_effect
-
-.. _`the dis stdlib module docs.` : https://docs.python.org/3.4/library/dis.html#python-bytecode-instructions
 
 ``codetransformer.transformers``
 --------------------------------
@@ -81,3 +67,5 @@ API Reference
 
 .. automodule:: codetransformer.decompiler
    :members: decompile, pycode_to_body, DecompilationContext, DecompilationError
+
+.. _`the dis stdlib module docs.` : https://docs.python.org/3.4/library/dis.html#python-bytecode-instructions

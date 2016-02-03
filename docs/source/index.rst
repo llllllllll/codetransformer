@@ -27,7 +27,7 @@ transformers include:
 * Overriding the ``is`` and ``not`` operators.
 * `Overloading Python's data structure literals`_.
 * `Optimizing functions by freezing globals as constants`_.
-* Pattern-matched exception handlers.
+* `Exception handlers that match on exception instances`_.
 
 Contents:
 
@@ -47,3 +47,4 @@ Indices and tables
 .. _lazy: https://github.com/llllllllll/lazy_python
 .. _Overloading Python's data structure literals: appendix.html\#codetransformer.transformers.literals.overloaded_dicts
 .. _Optimizing functions by freezing globals as constants: appendix.html#codetransformer.transformers.asconstants
+.. _Exception handlers that match on exception instances: appendix.html#codetransformer.transformers.exc_patterns.pattern_matched_exceptions

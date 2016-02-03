@@ -124,14 +124,17 @@ class InstructionMeta(ABCMeta, matchable):
 
 
 class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
-    """An abstraction of an instruction.
+    """
+    Base class for all instruction types.
 
     Parameters
     ----------
     arg : any, optional
+
         The argument for the instruction. This should be the actual value of
-        the argument, for example, if this is a ``LOAD_CONST``, use the
-        constant value, not the index that would appear in the bytecode.
+        the argument, for example, if this is a
+        :class:`~codetransformer.instructions.LOAD_CONST`, use the constant
+        value, not the index that would appear in the bytecode.
     """
     _no_arg = no_default
 
@@ -179,7 +182,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
 
     @classmethod
     def from_bytes(cls, bs):
-        """Create a sequence of ``Instruction`` objects from bytes.
+        """Create a sequence of :class:`Instruction` objects from bytes.
 
         Parameters
         ----------
@@ -263,7 +266,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
 
         Notes
         -----
-        This is a separate concept from instruction identity. Two seperate
+        This is a separate concept from instruction identity. Two separate
         instructions can be equivalent without being the same exact instance.
         This means that two equivalent instructions can be at different points
         in the bytecode or be targeted by different jumps.
