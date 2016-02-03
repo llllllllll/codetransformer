@@ -43,13 +43,13 @@ _uses_free = frozenset({
 })
 
 
-def _notimplemented_property(name):
-    @property
-    @abstractmethod
-    def _(self):
-        raise NotImplementedError(name)
+@abstractmethod
+class _notimplemented:
+    def __init__(self, name):
+        self._name = name
 
-    return _
+    def __get__(self, instance, owner):
+        raise NotImplementedError(self._name)
 
 
 @property
@@ -84,15 +84,16 @@ class InstructionMeta(ABCMeta, matchable):
             )
 
         if bases[0] is mcls._marker:
-            for name in ('opcode', 'absjmp', 'reljmp', 'opname', 'have_arg'):
-                dict_[name] = _notimplemented_property(name)
+            dict_['_reprname'] = immutableattr(name)
+            for attr in ('absjmp', 'have_arg', 'opcode', 'opname', 'reljmp'):
+                dict_[attr] = _notimplemented(attr)
             return super().__new__(mcls, name, (object,), dict_)
 
         if opcode not in opmap.values():
             raise TypeError('Invalid opcode: {}'.format(opcode))
 
         opname_ = opname[opcode]
-        dict_['opname'] = immutableattr(opname_)
+        dict_['opname'] = dict_['_reprname'] = immutableattr(opname_)
         dict_['opcode'] = immutableattr(opcode)
 
         absjmp = opcode in hasjabs
@@ -118,7 +119,7 @@ class InstructionMeta(ABCMeta, matchable):
         return escape(bytes((self.opcode,)))
 
     def __repr__(self):
-        return self.opname
+        return self._reprname
     __str__ = __repr__
 
 
