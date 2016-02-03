@@ -20,7 +20,8 @@ class DecompilationError(Exception):
 
 class DecompilationContext(immutable,
                            defaults={
-                               "in_function": False,
+                               "in_function_block": False,
+                               "in_lambda": False,
                                "make_function_context": None,
                                "top_of_loop": None}):
 
@@ -28,7 +29,8 @@ class DecompilationContext(immutable,
     Value representing the context of the current decompilation run.
     """
     __slots__ = (
-        'in_function',
+        'in_function_block',
+        'in_lambda',
         'make_function_context',
         'top_of_loop',
     )
@@ -53,7 +55,7 @@ def pycode_to_body(co, context):
 
     try:
         body = instrs_to_body(deque(code.instrs), context)
-        if context.in_function:
+        if context.in_function_block:
             return make_global_and_nonlocal_decls(code.instrs) + body
         return body
     finally:
@@ -323,7 +325,15 @@ def _make_function(instr, queue, stack, body, context):
     """
     Set a make_function_context, then push onto the stack.
     """
+    assert stack, "Empty stack before MAKE_FUNCTION."
+    prev = stack[-1]
+    expect(prev, instrs.LOAD_CONST, "before MAKE_FUNCTION")
+
     stack.append(instr)
+
+    if is_lambda_name(prev.arg):
+        return
+
     return context.update(
         make_function_context=MakeFunctionContext(
             closure=isinstance(instr, instrs.MAKE_CLOSURE),
@@ -449,12 +459,19 @@ def _pop(instr, queue, stack, body, context):
 
 @_process_instr.register(instrs.RETURN_VALUE)
 def _return(instr, queue, stack, body, context):
-    if not context.in_function:
+    if context.in_function_block:
+        body.append(ast.Return(value=make_expr(stack)))
+    elif context.in_lambda:
+        if body:
+            raise DecompilationError("Non-empty body in lambda: %s" % body)
+        # Just append the raw expr.  We'll extract the raw value in
+        # `make_lambda`.
+        body.append(make_expr(stack))
+    else:
         _check_stack_for_module_return(stack)
+        # Pop dummy LOAD_CONST(None) at the end of a module.
         stack.pop()
         return
-
-    body.append(ast.Return(value=make_expr(stack)))
 
 
 @_process_instr.register(instrs.BREAK_LOOP)
@@ -842,6 +859,56 @@ def normalize_boolop(expr):
 def _make_expr_internal(toplevel, stack_builders):
     raise DecompilationError(
         "Don't know how to build expression for %s" % toplevel
+    )
+
+
+@_make_expr_internal.register(instrs.MAKE_FUNCTION)
+@_make_expr_internal.register(instrs.MAKE_CLOSURE)
+def _make_lambda(toplevel, stack_builders):
+    load_name = stack_builders.pop()
+    load_code = stack_builders.pop()
+    _check_make_function_instrs(
+        load_code,
+        load_name,
+        toplevel,
+        expect_lambda=True,
+    )
+
+    co = load_code.arg
+    args, kwonly, varargs, varkwargs = paramnames(co)
+    defaults, kw_defaults, annotations = make_defaults_and_annotations(
+        toplevel,
+        stack_builders,
+    )
+    if annotations:
+        raise DecompilationError(
+            "Unexpected annotations while building lambda: %s" % annotations
+        )
+
+    if isinstance(toplevel, instrs.MAKE_CLOSURE):
+        # There should be a tuple of closure cells still on the stack here.
+        # These don't appear in the AST, but we need to consume them to ensure
+        # correctness down the line.
+        _closure_cells = make_closure_cells(stack_builders)  # noqa
+
+    body = pycode_to_body(co, DecompilationContext(in_lambda=True))
+    if len(body) != 1:
+        raise DecompilationError(
+            "Got multiple expresssions for lambda: %s" % body,
+        )
+    body = body[0]
+
+    return ast.Lambda(
+        args=make_function_arguments(
+            args,
+            kwonly,
+            varargs,
+            varkwargs,
+            defaults,
+            kw_defaults,
+            annotations,
+        ),
+        body=body,
     )
 
 
@@ -1257,9 +1324,6 @@ def make_function(function_builders, *, closure):
 
     co = load_code_instr.arg
     name = load_name_instr.arg
-    if name == '<lambda>':
-        raise DecompilationError("Don't know how to decompile lambdas.")
-
     args, kwonly, varargs, varkwargs = paramnames(co)
 
     # Convert default and annotation builders to AST nodes.
@@ -1274,12 +1338,9 @@ def make_function(function_builders, *, closure):
 
     if closure:
         # There should be a tuple of closure cells still on the stack here.
-        closure_cells = make_expr(builders)
-        if not isinstance(closure_cells, ast.Tuple):
-            raise DecompilationError(
-                "Expected an ast.Tuple of closure cells, "
-                "but got %s" % closure_cells,
-            )
+        # These don't appear in the AST, but we need to consume them to ensure
+        # correctness down the line.
+        closure_cells = make_closure_cells(builders)  # noqa
 
     # We should have consumed all our builders by this point.
     if builders:
@@ -1291,24 +1352,55 @@ def make_function(function_builders, *, closure):
 
     return ast.FunctionDef(
         name=name.split('.')[-1],
-        args=ast.arguments(
-            args=[ast.arg(arg=a, annotation=annotations.get(a)) for a in args],
-            kwonlyargs=[
-                ast.arg(arg=a, annotation=annotations.get(a)) for a in kwonly
-            ],
-            defaults=defaults,
-            kw_defaults=list(map(kw_defaults.get, kwonly)),
-            vararg=None if varargs is None else ast.arg(
-                arg=varargs, annotation=annotations.get(varargs),
-            ),
-            kwarg=None if varkwargs is None else ast.arg(
-                arg=varkwargs, annotation=annotations.get(varkwargs)
-            ),
+        args=make_function_arguments(
+            args,
+            kwonly,
+            varargs,
+            varkwargs,
+            defaults,
+            kw_defaults,
+            annotations,
         ),
-        body=pycode_to_body(co, DecompilationContext(in_function=True)),
+        body=pycode_to_body(co, DecompilationContext(in_function_block=True)),
         decorator_list=decorators,
         returns=annotations.get('return'),
     )
+
+
+def make_function_arguments(args,
+                            kwonly,
+                            varargs,
+                            varkwargs,
+                            defaults,
+                            kw_defaults,
+                            annotations):
+    """
+    Make an ast.arguments from the args parsed out of a code object.
+    """
+    return ast.arguments(
+        args=[ast.arg(arg=a, annotation=annotations.get(a)) for a in args],
+        kwonlyargs=[
+            ast.arg(arg=a, annotation=annotations.get(a)) for a in kwonly
+        ],
+        defaults=defaults,
+        kw_defaults=list(map(kw_defaults.get, kwonly)),
+        vararg=None if varargs is None else ast.arg(
+            arg=varargs, annotation=annotations.get(varargs),
+        ),
+        kwarg=None if varkwargs is None else ast.arg(
+            arg=varkwargs, annotation=annotations.get(varkwargs)
+        ),
+    )
+
+
+def make_closure_cells(stack_builders):
+    cells = make_expr(stack_builders)
+    if not isinstance(cells, ast.Tuple):
+        raise DecompilationError(
+            "Expected an ast.Tuple of closure cells, "
+            "but got %s" % cells,
+        )
+    return cells
 
 
 def make_global_and_nonlocal_decls(code_instrs):
@@ -1420,7 +1512,9 @@ def paramnames(co):
 
 def _check_make_function_instrs(load_code_instr,
                                 load_name_instr,
-                                make_function_instr):
+                                make_function_instr,
+                                *,
+                                expect_lambda=False):
     """
     Validate the instructions passed to a make_function call.
     """
@@ -1449,6 +1543,17 @@ def _check_make_function_instrs(load_code_instr,
             "make_function expected load_name_instr "
             "to load a string, but got %r instead" % load_name_instr.arg
         )
+
+    # This is an endswith rather than '==' because the arg is the
+    # fully-qualified name.
+    is_lambda = is_lambda_name(load_name_instr.arg)
+    if expect_lambda and not is_lambda:
+        raise ValueError(
+            "Expected to make a function named <lambda>, but "
+            "got %r instead." % load_name_instr.arg
+        )
+    if not expect_lambda and is_lambda:
+        raise ValueError("Unexpectedly received lambda function.")
 
     # Validate make_function_instr
     if not isinstance(make_function_instr, (instrs.MAKE_FUNCTION,
@@ -1514,6 +1619,13 @@ def expect(instr, expected, context):
             )
         )
     return instr
+
+
+def is_lambda_name(name):
+    """
+    Check if `name` is the name of lambda function.
+    """
+    return name.endswith('<lambda>')
 
 
 def popwhile(cond, queue, *, side):

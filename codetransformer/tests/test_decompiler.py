@@ -66,10 +66,7 @@ def check(text, ast_text=None):
     code = compile(text, '<test>', 'exec')
 
     decompiled_ast = Module(
-        body=pycode_to_body(
-            code,
-            DecompilationContext(in_function=False)
-        )
+        body=pycode_to_body(code, DecompilationContext()),
     )
 
     compare(decompiled_ast, ast)
@@ -302,6 +299,46 @@ def test_paramnames():
     assert kwonlyargs == ('c', 'd')
     assert varargs == 'args'
     assert varkwargs == 'kwargs'
+
+
+@pytest.mark.parametrize(
+    "signature,expr",
+    product(
+        [
+            "",
+            "a",
+            "a, b",
+            "*a, b",
+            "a, **b",
+            "*a, **b",
+            "a=1, b=2, c=3",
+            "a, *, b=1, c=2, d=3",
+            "a, b=1, c=2, *, d, e=3, f, g=4",
+            "a, b=1, *args, c, d=2, **kwargs",
+            "a, b=c + d, *, e=f + g",
+        ],
+        [
+            "a + b",
+            "None",
+            "lambda x: lambda y: lambda z: (x, y, z)",
+            "[lambda x: a + b, 1]",
+            "[(lambda y: a + b) + (lambda z: d + e), 1]",
+        ],
+    ),
+)
+def test_lambda(signature, expr):
+    check_formatted("lambda {sig}: {expr}", sig=signature, expr=expr)
+    check_formatted("func = (lambda {sig}: {expr})", sig=signature, expr=expr)
+    check_formatted(
+        dedent(
+            """
+            def foo():
+                return (lambda {sig}: {expr})()
+            """
+        ),
+        sig=signature,
+        expr=expr,
+    )
 
 
 def test_simple_function():
