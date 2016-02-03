@@ -239,17 +239,21 @@ class pattern(immutable):
 
     Examples
     --------
-    # Matches a single BINARY_ADD instruction.
-    pattern(BINARY_ADD)
+    Match a single BINARY_ADD instruction::
 
-    # Matches a single BINARY_ADD followed by a RETURN_VALUE.
-    pattern(BINARY_ADD, RETURN_VALUE)
+        pattern(BINARY_ADD)
 
-    # Matches a single BINARY_ADD followed by any other single instruction.
-    pattern(BINARY_ADD, matchany)
+    Match a single BINARY_ADD followed by a RETURN_VALUE::
 
-    # Matches a single BINARY_ADD followed by any number of instructions.
-    pattern(BINARY_ADD, matchany[var])
+        pattern(BINARY_ADD, RETURN_VALUE)
+
+    Match a single BINARY_ADD followed by any other single instruction::
+
+        pattern(BINARY_ADD, matchany)
+
+    Match a single BINARY_ADD followed by any number of instructions::
+
+        pattern(BINARY_ADD, matchany[var])
     """
     __slots__ = 'matchable', 'startcodes', '_compiled'
 
