@@ -63,7 +63,7 @@ def _vartype(self):
 
 
 class InstructionMeta(ABCMeta, matchable):
-    _marker = type('_marker', (object,), {})  # sentinel
+    _marker = object()  # sentinel
     _type_cache = {}
 
     def __init__(self, *args, opcode=None):
