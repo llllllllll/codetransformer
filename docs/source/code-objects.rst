@@ -5,7 +5,7 @@
 The :class:`~codetransformer.code.Code` type is the foundational abstraction in
 ``codetransformer``.  It provides high-level APIs for working with
 logically-grouped sets of instructions and for converting to and from CPython's
-native `code` type.
+native :class:`code <types.CodeType>` type.
 
 Constructing Code Objects
 =========================
@@ -99,8 +99,8 @@ instructions.  The original function is not mutated in place.
 .. code-block:: python
 
   >>> transformer = add2mul()
-  >>> mult2 = transformer(add2) # mult2 is a brand-new function
-  >>> mult2(5)
+  >>> mul2 = transformer(add2) # mult2 is a brand-new function
+  >>> mul2(5)
   10
 
 When we don't care about having access to the pre-transformed version of a
