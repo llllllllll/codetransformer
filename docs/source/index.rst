@@ -3,8 +3,6 @@ codetransformer
 
 Welcome to the documentation for ``codetransformer``.
 
-There isn't very much here yet.
-
 Contents:
 
 .. toctree::
