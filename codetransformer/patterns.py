@@ -222,7 +222,13 @@ class not_(immutable, matchable):
 
 
 class pattern(immutable):
-    """A pattern of instructions that can be matched against.
+    """
+    A pattern of instructions that can be matched against.
+
+    This class is intended to be used as a decorator on methods of
+    CodeTransformer subclasses.  It is used to mark that a given method should
+    be called on sequences of instructions that match the pattern described by
+    the inputs.
 
     Parameters
     ----------
@@ -230,6 +236,20 @@ class pattern(immutable):
         The type of instructions to match against.
     startcodes : container of any
         The startcodes where this pattern should be tried.
+
+    Examples
+    --------
+    # Matches a single BINARY_ADD instruction.
+    pattern(BINARY_ADD)
+
+    # Matches a single BINARY_ADD followed by a RETURN_VALUE.
+    pattern(BINARY_ADD, RETURN_VALUE)
+
+    # Matches a single BINARY_ADD followed by any other single instruction.
+    pattern(BINARY_ADD, matchany)
+
+    # Matches a single BINARY_ADD followed by any number of instructions.
+    pattern(BINARY_ADD, matchany[var])
     """
     __slots__ = 'matchable', 'startcodes', '_compiled'
 
