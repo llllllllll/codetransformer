@@ -43,13 +43,12 @@ _uses_free = frozenset({
 })
 
 
-@abstractmethod
-class _notimplemented:
-    def __init__(self, name):
-        self._name = name
-
-    def __get__(self, instance, owner):
-        raise NotImplementedError(self._name)
+def _notimplemented(name):
+    @property
+    @abstractmethod
+    def _(self):
+        raise NotImplementedError(name)
+    return _
 
 
 @property
