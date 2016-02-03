@@ -40,6 +40,54 @@ class MakeFunctionContext(immutable):
     __slots__ = ('closure',)
 
 
+def decompile(f):
+    """
+    Decompile a function.
+
+    Parameters
+    ----------
+    f : function
+        The function to decompile.
+
+    Returns
+    -------
+    ast : ast.FunctionDef
+        A FunctionDef node that compiles to f.
+    """
+    co = f.__code__
+    args, kwonly, varargs, varkwargs = paramnames(co)
+    annotations = f.__annotations__ or {}
+    defaults = list(f.__defaults__ or ())
+    kw_defaults = f.__kwdefaults__ or {}
+
+    if f.__name__ == '<lambda>':
+        node = ast.Lambda
+        body = pycode_to_body(co, DecompilationContext(in_lambda=True))[0]
+        extra_kwargs = {}
+    else:
+        node = ast.FunctionDef
+        body = pycode_to_body(co, DecompilationContext(in_function_block=True))
+        extra_kwargs = {
+            'decorator_list': [],
+            'returns': annotations.get('return')
+        }
+
+    return node(
+        name=f.__name__,
+        args=make_function_arguments(
+            args=args,
+            kwonly=kwonly,
+            varargs=varargs,
+            varkwargs=varkwargs,
+            defaults=defaults,
+            kw_defaults=kw_defaults,
+            annotations=annotations,
+        ),
+        body=body,
+        **extra_kwargs
+    )
+
+
 def pycode_to_body(co, context):
     """
     Convert a Python code object to a list of AST body elements.
@@ -1351,6 +1399,7 @@ def make_function(function_builders, *, closure):
         )
 
     return ast.FunctionDef(
+        body_code=co,
         name=name.split('.')[-1],
         args=make_function_arguments(
             args,

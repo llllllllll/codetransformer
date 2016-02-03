@@ -11,7 +11,7 @@ from .utils.immutable import immutableattr
 from .utils.no_default import no_default
 
 
-__all__ = ['Instruction'] + list(opmap)
+__all__ = ['Instruction'] + sorted(list(opmap))
 
 # The opcodes that use the co_names tuple.
 _uses_name = frozenset({
@@ -64,7 +64,7 @@ def _vartype(self):
 
 
 class InstructionMeta(ABCMeta, matchable):
-    _marker = object()  # sentinel
+    _marker = type('_marker', (object,), {})  # sentinel
     _type_cache = {}
 
     def __init__(self, *args, opcode=None):
@@ -208,10 +208,32 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
 
     @classmethod
     def from_opcode(cls, opcode, arg=_no_arg):
+        """
+        Create an instruction from an opcode and raw argument.
+
+        Parameters
+        ----------
+        opcode : int
+            Opcode for the instruction to create.
+        arg : int, optional
+            The raw argument for the instruction to create, if any.
+        """
         return type(cls)(opname[opcode], (cls,), {}, opcode=opcode)(arg)
 
     @property
     def stack_effect(self):
+        """
+        The net effect of executing this instruction on the interpreter stack.
+
+        Instructions that pop values off the stack have negative stack effect
+        equal to the number of popped values.
+
+        Instructions that push values onto the stack have positive stack effect
+        equal to the number of popped values.
+
+        Example
+        -------
+        """
         return stack_effect(
             self.opcode,
             *((self.arg if isinstance(self.arg, int) else 0,)
@@ -395,6 +417,14 @@ for name, opcode in opmap.items():
 
     if class_.is_jmp:
         class_._normalize_arg = _check_jmp_arg
+
+    class_.__doc__ = (
+        """
+        See Also
+        --------
+        dis.{name}
+        """.format(name=name),
+    )
 
     del class_
 

@@ -1,3 +1,10 @@
+"""
+codetransformer.utils.immutable
+-------------------------------
+
+Utilities for creating and working with immutable objects.
+"""
+
 from collections import ChainMap
 from itertools import starmap
 from weakref import WeakKeyDictionary

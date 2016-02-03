@@ -1,3 +1,9 @@
+"""
+codetransformer.utils.pretty
+----------------------------
+
+Utilities for pretty-printing ASTs and code objects.
+"""
 from ast import iter_fields, AST, Name, Num, parse
 import dis
 from functools import partial, singledispatch
@@ -12,6 +18,14 @@ from codetransformer.code import Flag
 
 INCLUDE_ATTRIBUTES_DEFAULT = False
 INDENT_DEFAULT = '  '
+
+__all__ = [
+    'a',
+    'd',
+    'display',
+    'pformat_ast',
+    'pprint_ast',
+]
 
 
 def pformat_ast(node,

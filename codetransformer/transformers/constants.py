@@ -49,6 +49,16 @@ class asconstants(CodeTransformer):
     """
     A code transformer that inlines names as constants.
 
+    Parameters
+    ----------
+    \*builtin_names
+        Names of builtins to freeze as constants.
+    \*\*kwargs
+        Additional key-value pairs to bind as constants.
+
+    Examples
+    --------
+
     >>> from codetransformer.transformers import asconstants
     >>> @asconstants(a=1)
     ... def f():
@@ -60,14 +70,14 @@ class asconstants(CodeTransformer):
     >>> f()
     1
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *builtin_names, **kwargs):
         super().__init__()
         bltins = vars(builtins)
-        if not (args or kwargs):
+        if not (builtin_names or kwargs):
             self._constnames = bltins.copy()
         else:
             self._constnames = constnames = {}
-            for arg in args:
+            for arg in builtin_names:
                 constnames[arg] = bltins[arg]
             overlap = constnames.keys() & kwargs.keys()
             if overlap:

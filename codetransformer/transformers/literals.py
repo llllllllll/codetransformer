@@ -18,18 +18,18 @@ class overloaded_dicts(CodeTransformer):
     This acts by creating an empty map and then inserting every
     key value pair in order.
 
-    The code that is generated will turn something like:
+    The code that is generated will turn something like::
 
-    {k_0: v_0, k_1: v_1, ..., k_n: v_n}
+        {k_0: v_0, k_1: v_1, ..., k_n: v_n}
 
-    into:
+    into::
 
-    _tmp = astype()
-    _tmp[k_0] = v_0
-    _tmp[k_1] = v_1
-    ...
-    _tmp[k_n] = v_n
-    _tmp  # leaves the map on the stack.
+        _tmp = astype()
+        _tmp[k_0] = v_0
+        _tmp[k_1] = v_1
+        ...
+        _tmp[k_n] = v_n
+        _tmp  # leaves the map on the stack.
 
     Parameters
     ----------
@@ -47,17 +47,17 @@ class overloaded_dicts(CodeTransformer):
     >>> f()
     OrderedDict([('a', 1), ('b', 2), ('c', 3)])
     """
-    def __init__(self, astype):
+    def __init__(self, tnfm):
         super().__init__()
-        self.astype = astype
+        self.tnfm = tnfm
 
     @pattern(instructions.BUILD_MAP, matchany[var], instructions.MAP_ADD)
     def _start_comprehension(self, instr, *instrs):
-        yield instructions.LOAD_CONST(self.astype).steal(instr)
-        # TOS  = self.astype
+        yield instructions.LOAD_CONST(self.tnfm).steal(instr)
+        # TOS  = self.tnfm
 
         yield instructions.CALL_FUNCTION(0)
-        # TOS  = m = self.astype()
+        # TOS  = m = self.tnfm()
 
         yield instructions.STORE_FAST('__map__')
 
@@ -91,11 +91,11 @@ class overloaded_dicts(CodeTransformer):
 
         @pattern(instructions.BUILD_MAP)
         def _build_map(self, instr):
-            yield instructions.LOAD_CONST(self.astype).steal(instr)
-            # TOS  = self.astype
+            yield instructions.LOAD_CONST(self.tnfm).steal(instr)
+            # TOS  = self.tnfm
 
             yield instructions.CALL_FUNCTION(0)
-            # TOS  = m = self.astype()
+            # TOS  = m = self.tnfm()
 
             yield from (instructions.DUP_TOP(),) * instr.arg
             # TOS  = m
@@ -134,7 +134,7 @@ class overloaded_dicts(CodeTransformer):
         # Python 3.5 and beyond!
 
         def _construct_map(self, key_value_pairs):
-            mapping = self.astype()
+            mapping = self.tnfm()
             for key, value in zip(key_value_pairs[::2], key_value_pairs[1::2]):
                 mapping[key] = value
             return mapping
@@ -169,21 +169,25 @@ def _format_constant_docstring(type_):
     return dedent(
         """
         Transformer that applies a callable to each {type_} constant in the
-        transformed code object
+        transformed code object.
 
         Parameters
         ----------
-        astype : callable
+        tnfm : callable
             A callable to be applied to {type_} literals.
+
+        See Also
+        --------
+        codetransformer.transformers.literals.overloaded_strs
         """
     ).format(type_=type_.__name__)
 
 
 class _ConstantTransformerBase(CodeTransformer):
 
-    def __init__(self, astype):
+    def __init__(self, tnfm):
         super().__init__()
-        self.astype = astype
+        self.tnfm = tnfm
 
     def transform_consts(self, consts):
         # This is all one expression.
@@ -193,7 +197,7 @@ class _ConstantTransformerBase(CodeTransformer):
                 if isinstance(const, frozenset)
                 else self.transform_consts(const)
                 if isinstance(const, tuple)
-                else self.astype(const)
+                else self.tnfm(const)
                 if isinstance(const, self._type)
                 else const
                 for const in consts
@@ -201,13 +205,15 @@ class _ConstantTransformerBase(CodeTransformer):
         )
 
 
-def overloaded_constants(type_):
-    """Factory for constant transformers that apply to a particular type.
+def overloaded_constants(type_, __doc__=None):
+    """A factory for transformers that apply functions to literals.
 
     Parameters
     ----------
     type_ : type
         The type to overload.
+    __doc__ : str, optional
+        Docstring for the generated transformer.
 
     Returns
     -------
@@ -216,23 +222,60 @@ def overloaded_constants(type_):
         literal types.
     """
     typename = type_.__name__
-    if not typename.endswith('s'):
+    if typename.endswith('x'):
+        typename += 'es'
+    elif not typename.endswith('s'):
         typename += 's'
+
+    if __doc__ is None:
+        __doc__ = _format_constant_docstring(type_)
 
     return type(
         "overloaded_" + typename,
         (_ConstantTransformerBase,), {
             '_type': type_,
-            '__doc__': _format_constant_docstring(type_),
+            '__doc__': __doc__,
         },
     )
 
 
-overloaded_strs = overloaded_constants(str)
-haskell_strs = overloaded_strs(tuple)
+overloaded_strs = overloaded_constants(
+    str,
+    __doc__=dedent(
+        """
+        A transformer that overloads string literals.
+
+        Rewrites all constants of the form::
+
+            "some string"
+
+        as::
+
+            tnfm("some string")
+
+        Parameters
+        ----------
+        tnfm : callable
+            Function to call on all string literals in the transformer target.
+
+        Examples
+        --------
+        >>> @overloaded_strs(lambda x: "ayy lmao ")
+        ... def prepend_foo(s):
+        ...     return "foo" + s
+        ...
+        >>> prepend_foo("bar")
+        'ayy lmao bar'
+        """
+    )
+)
 overloaded_bytes = overloaded_constants(bytes)
-bytearray_literals = overloaded_bytes(bytearray)
 overloaded_floats = overloaded_constants(float)
+overloaded_ints = overloaded_constants(int)
+overloaded_complexes = overloaded_constants(complex)
+
+haskell_strs = overloaded_strs(tuple)
+bytearray_literals = overloaded_bytes(bytearray)
 decimal_literals = overloaded_floats(Decimal)
 
 
@@ -244,16 +287,16 @@ def _start_comprehension(self, *instrs):
 def _return_value(self, instr):
     # TOS  = collection
 
-    yield instructions.LOAD_CONST(self.astype).steal(instr)
-    # TOS  = self.astype
+    yield instructions.LOAD_CONST(self.tnfm).steal(instr)
+    # TOS  = self.tnfm
     # TOS1 = collection
 
     yield instructions.ROT_TWO()
     # TOS  = collection
-    # TOS1 = self.astype
+    # TOS1 = self.tnfm
 
     yield instructions.CALL_FUNCTION(1)
-    # TOS  = self.astype(collection)
+    # TOS  = self.tnfm(collection)
 
     yield instr
 
@@ -263,7 +306,7 @@ def _build(self, instr):
     yield instr
     # TOS  = new_list
 
-    yield instructions.LOAD_CONST(self.astype)
+    yield instructions.LOAD_CONST(self.tnfm)
     # TOS  = astype
     # TOS1 = new_list
 
@@ -341,7 +384,7 @@ def transform_consts(self, consts):
     consts = super(overloaded_sets, self).transform_consts(consts)
     return tuple(
         # Always pass a thawed set so mutations can happen inplace.
-        self.astype(set(const)) if isinstance(const, frozenset) else const
+        self.tnfm(set(const)) if isinstance(const, frozenset) else const
         for const in consts
     )
 
@@ -357,7 +400,7 @@ overloaded_tuples = overloaded_build(tuple)
 def transform_consts(self, consts):
     consts = super(overloaded_tuples, self).transform_consts(consts)
     return tuple(
-        self.astype(const) if isinstance(const, tuple) else const
+        self.tnfm(const) if isinstance(const, tuple) else const
         for const in consts
     )
 
