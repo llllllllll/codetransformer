@@ -48,6 +48,9 @@ For details on particular instructions, see `the dis stdlib module docs.`_
 
 .. autoclass:: codetransformer.transformers.exc_patterns.pattern_matched_exceptions
 
+``codetransformer.patterns``
+----------------------------
+.. autoclass:: codetransformer.patterns.pattern
 
 ``codetransformer.utils``
 -------------------------
