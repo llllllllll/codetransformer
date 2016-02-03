@@ -47,17 +47,17 @@ class overloaded_dicts(CodeTransformer):
     >>> f()
     OrderedDict([('a', 1), ('b', 2), ('c', 3)])
     """
-    def __init__(self, tnfm):
+    def __init__(self, astype):
         super().__init__()
-        self.tnfm = tnfm
+        self.astype = astype
 
     @pattern(instructions.BUILD_MAP, matchany[var], instructions.MAP_ADD)
     def _start_comprehension(self, instr, *instrs):
-        yield instructions.LOAD_CONST(self.tnfm).steal(instr)
-        # TOS  = self.tnfm
+        yield instructions.LOAD_CONST(self.astype).steal(instr)
+        # TOS  = self.astype
 
         yield instructions.CALL_FUNCTION(0)
-        # TOS  = m = self.tnfm()
+        # TOS  = m = self.astype()
 
         yield instructions.STORE_FAST('__map__')
 
@@ -91,11 +91,11 @@ class overloaded_dicts(CodeTransformer):
 
         @pattern(instructions.BUILD_MAP)
         def _build_map(self, instr):
-            yield instructions.LOAD_CONST(self.tnfm).steal(instr)
-            # TOS  = self.tnfm
+            yield instructions.LOAD_CONST(self.astype).steal(instr)
+            # TOS  = self.astype
 
             yield instructions.CALL_FUNCTION(0)
-            # TOS  = m = self.tnfm()
+            # TOS  = m = self.astype()
 
             yield from (instructions.DUP_TOP(),) * instr.arg
             # TOS  = m
@@ -134,7 +134,7 @@ class overloaded_dicts(CodeTransformer):
         # Python 3.5 and beyond!
 
         def _construct_map(self, key_value_pairs):
-            mapping = self.tnfm()
+            mapping = self.astype()
             for key, value in zip(key_value_pairs[::2], key_value_pairs[1::2]):
                 mapping[key] = value
             return mapping
@@ -173,7 +173,7 @@ def _format_constant_docstring(type_):
 
         Parameters
         ----------
-        tnfm : callable
+        xform : callable
             A callable to be applied to {type_} literals.
 
         See Also
@@ -185,9 +185,9 @@ def _format_constant_docstring(type_):
 
 class _ConstantTransformerBase(CodeTransformer):
 
-    def __init__(self, tnfm):
+    def __init__(self, xform):
         super().__init__()
-        self.tnfm = tnfm
+        self.xform = xform
 
     def transform_consts(self, consts):
         # This is all one expression.
@@ -197,7 +197,7 @@ class _ConstantTransformerBase(CodeTransformer):
                 if isinstance(const, frozenset)
                 else self.transform_consts(const)
                 if isinstance(const, tuple)
-                else self.tnfm(const)
+                else self.xform(const)
                 if isinstance(const, self._type)
                 else const
                 for const in consts
@@ -251,11 +251,11 @@ overloaded_strs = overloaded_constants(
 
         as::
 
-            tnfm("some string")
+            xform("some string")
 
         Parameters
         ----------
-        tnfm : callable
+        xform : callable
             Function to call on all string literals in the transformer target.
 
         Examples
@@ -287,16 +287,16 @@ def _start_comprehension(self, *instrs):
 def _return_value(self, instr):
     # TOS  = collection
 
-    yield instructions.LOAD_CONST(self.tnfm).steal(instr)
-    # TOS  = self.tnfm
+    yield instructions.LOAD_CONST(self.xform).steal(instr)
+    # TOS  = self.xform
     # TOS1 = collection
 
     yield instructions.ROT_TWO()
     # TOS  = collection
-    # TOS1 = self.tnfm
+    # TOS1 = self.xform
 
     yield instructions.CALL_FUNCTION(1)
-    # TOS  = self.tnfm(collection)
+    # TOS  = self.xform(collection)
 
     yield instr
 
@@ -306,7 +306,7 @@ def _build(self, instr):
     yield instr
     # TOS  = new_list
 
-    yield instructions.LOAD_CONST(self.tnfm)
+    yield instructions.LOAD_CONST(self.xform)
     # TOS  = astype
     # TOS1 = new_list
 
@@ -384,7 +384,7 @@ def transform_consts(self, consts):
     consts = super(overloaded_sets, self).transform_consts(consts)
     return tuple(
         # Always pass a thawed set so mutations can happen inplace.
-        self.tnfm(set(const)) if isinstance(const, frozenset) else const
+        self.xform(set(const)) if isinstance(const, frozenset) else const
         for const in consts
     )
 
@@ -400,7 +400,7 @@ overloaded_tuples = overloaded_build(tuple)
 def transform_consts(self, consts):
     consts = super(overloaded_tuples, self).transform_consts(consts)
     return tuple(
-        self.tnfm(const) if isinstance(const, tuple) else const
+        self.xform(const) if isinstance(const, tuple) else const
         for const in consts
     )
 
