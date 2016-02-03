@@ -231,8 +231,15 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         Instructions that push values onto the stack have positive stack effect
         equal to the number of popped values.
 
-        Example
-        -------
+        Examples
+        --------
+        - LOAD_{FAST,NAME,GLOBAL,DEREF} push one value onto the stack.
+          They have a stack_effect of 1.
+        - POP_JUMP_IF_{TRUE,FALSE} always pop one value off the stack.
+          They have a stack effect of -1.
+        - BINARY_* instructions pop two instructions off the stack, apply a
+          binary operator, and push the resulting value onto the stack.
+          They have a stack effect of -1 (-2 values consumed + 1 value pushed).
         """
         return stack_effect(
             self.opcode,
