@@ -49,6 +49,14 @@ class asconstants(CodeTransformer):
     """
     A code transformer that inlines names as constants.
 
+    - Positional arguments are interpreted as names of builtins (e.g. ``len``,
+      ``print``) to freeze as constants in the decorated function's namespace.
+
+    - Keyword arguments provide additional custom names to freeze as constants.
+
+    - If invoked with no positional or keyword arguments, ``asconstants``
+      inlines all names in ``builtins``.
+
     Parameters
     ----------
     \*builtin_names
@@ -58,8 +66,25 @@ class asconstants(CodeTransformer):
 
     Examples
     --------
+    Freezing Builtins:
 
     >>> from codetransformer.transformers import asconstants
+    >>>
+    >>> @asconstants('len')
+    ... def with_asconstants(x):
+    ...     return len(x) * 2
+    ...
+    >>> def without_asconstants(x):
+    ...     return len(x) * 2
+    ...
+    >>> len = lambda x: 0
+    >>> with_asconstants([1, 2, 3])
+    6
+    >>> without_asconstants([1, 2, 3])
+    0
+
+    Adding Custom Constants:
+
     >>> @asconstants(a=1)
     ... def f():
     ...     return a
