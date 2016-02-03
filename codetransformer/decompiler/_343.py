@@ -7,11 +7,20 @@ import types
 from toolz import complement, compose, curry, sliding_window
 import toolz.curried.operator as op
 
-from .code import Code, Flag
-from . import instructions as instrs
-from .utils.functional import not_a, is_a
-from .utils.immutable import immutable
+from . import paramnames
+from ..code import Code
+from .. import instructions as instrs
+from ..utils.functional import not_a, is_a
+from ..utils.immutable import immutable
 from codetransformer import a as showa, d as showd  # noqa
+
+
+__all__ = [
+    'DecompilationContext',
+    'DecompilationError',
+    'decompile',
+    'pycode_to_body',
+]
 
 
 class DecompilationError(Exception):
@@ -1531,32 +1540,6 @@ def unpack_make_function_arg(arg):
     https://docs.python.org/3/library/dis.html#opcode-MAKE_FUNCTION
     """
     return arg & 0xFF, (arg >> 8) & 0xFF, (arg >> 16) & 0x7FFF
-
-
-def paramnames(co):
-    """
-    Get the parameter names from a pycode object.
-
-    Returns a 4-tuple of (args, kwonlyargs, varargs, varkwargs).
-    varargs and varkwargs will be None if the function doesn't take *args or
-    **kwargs, respectively.
-    """
-    flags = co.co_flags
-    varnames = co.co_varnames
-
-    argcount, kwonlyargcount = co.co_argcount, co.co_kwonlyargcount
-    total = argcount + kwonlyargcount
-
-    args = varnames[:argcount]
-    kwonlyargs = varnames[argcount:total]
-    varargs, varkwargs = None, None
-    if flags & Flag.CO_VARARGS:
-        varargs = varnames[total]
-        total += 1
-    if flags & Flag.CO_VARKEYWORDS:
-        varkwargs = varnames[total]
-
-    return args, kwonlyargs, varargs, varkwargs
 
 
 def _check_make_function_instrs(load_code_instr,
