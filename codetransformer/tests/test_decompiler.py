@@ -4,18 +4,26 @@ Tests for decompiler.py
 from ast import AST, iter_fields, Module, parse
 from functools import partial
 from itertools import product, zip_longest, combinations_with_replacement
+import sys
 from textwrap import dedent
 
 import pytest
 from toolz.curried.operator import add
 
 from codetransformer import a as show  # noqa
-from ..decompiler import (
-    DecompilationContext,
-    decompile,
-    paramnames,
-    pycode_to_body,
+
+_343 = sys.version_info[:3] == (3, 4, 3)
+pytestmark = pytest.mark.skipif(
+    not _343,
+    reason='decompiler only runs on 3.4',
 )
+if _343:
+    from ..decompiler import (
+        DecompilationContext,
+        decompile,
+        paramnames,
+        pycode_to_body,
+    )
 
 _current_test = None
 
