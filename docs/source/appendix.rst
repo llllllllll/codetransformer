@@ -1,8 +1,48 @@
-Codetransformer API Reference
------------------------------
+API Reference
+=============
+
+``codetransformer.code``
+------------------------
+
+.. autoclass:: codetransformer.code.Code
+   :members:
+
+.. autoclass:: codetransformer.code.Flag
+   :members:
+   :undoc-members:
+
+``codetransformer.core``
+------------------------
+
+.. autoclass:: codetransformer.core.CodeTransformer
+   :members:
+
+``codetransformer.instructions``
+--------------------------------
+
+.. automodule:: codetransformer.instructions
+   :members:
+   :undoc-members:
+   :exclude-members: Instruction
+
+.. py:class:: Instruction
+
+   Base class for all Instructions.
+
+   For details on particular instructions, see `the dis stdlib module docs.`_
+
+   .. automethod:: from_bytes
+   .. automethod:: from_opcode
+
+   .. automethod:: steal
+   .. automethod:: equiv
+
+   .. autoattribute:: stack_effect
+
+.. _`the dis stdlib module docs.` : https://docs.python.org/3.4/library/dis.html#python-bytecode-instructions
 
 ``codetransformer.transformers``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------
 
 .. automodule:: codetransformer.transformers
    :members:
@@ -20,45 +60,11 @@ Codetransformer API Reference
 .. autoclass:: codetransformer.transformers.literals.bytearray_literals
 .. autoclass:: codetransformer.transformers.literals.decimal_literals
 
+.. autoclass:: codetransformer.transformers.exc_patterns.pattern_matched_exceptions
 
-``codetransformer.code``
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: codetransformer.code.Code
-   :members:
-
-.. autoclass:: codetransformer.code.Flag
-   :members:
-   :undoc-members:
-
-
-``codetransformer.instructions``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. automodule:: codetransformer.instructions
-
-.. py:class:: codetransformer.instructions.Instruction
-
-   Base class for all Instructions.
-
-   For details on particular instructions, see `the dis stdlib module docs.`_
-
-   .. automethod:: from_bytes
-   .. automethod:: from_opcode
-
-   .. automethod:: steal
-   .. automethod:: equiv
-
-   .. autoattribute:: stack_effect
-
-   :members:
-   :undoc-members:
-   :exclude-members: Instruction
-
-.. _`the dis stdlib module docs.` : https://docs.python.org/3.4/library/dis.html#python-bytecode-instructions
 
 ``codetransformer.utils``
-~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------
 
 .. automodule:: codetransformer.utils.pretty
    :members:
@@ -68,3 +74,10 @@ Codetransformer API Reference
 
 .. automodule:: codetransformer.utils.functional
    :members:
+
+
+``codetransformer.decompiler``
+------------------------------
+
+.. automodule:: codetransformer.decompiler
+   :members: decompile, pycode_to_body, DecompilationContext, DecompilationError
