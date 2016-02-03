@@ -20,6 +20,9 @@ from .utils.instance import instance
 
 @unique
 class Flag(IntEnum):
+    """
+    An enum describing the bitmask of flags that can be set on a code object.
+    """
     # These enum values and comments are taken from CPython.
     CO_OPTIMIZED = 0x0001
     CO_NEWLOCALS = 0x0002
@@ -108,7 +111,7 @@ class Flag(IntEnum):
 
         See Also
         --------
-        Flag.unpack
+        codetransformer.code.Flag.unpack
         """
         ls = locals()
         return reduce(
@@ -133,7 +136,7 @@ class Flag(IntEnum):
 
         See Also
         --------
-        Flag.pack
+        codetransformer.code.Flag.pack
         """
         if mask > cls.max:
             raise ValueError('Invalid mask, too large: %d' % mask)
@@ -536,7 +539,7 @@ class Code:
     def argcount(self):
         """The number of arguments this code object accepts.
 
-        This does not include varargs (*args).
+        This does not include varargs (\*args).
         """
         return self._argcount
 
@@ -544,7 +547,7 @@ class Code:
     def kwonlyargcount(self):
         """The number of keyword only arguments this code object accepts.
 
-        This does not include varkwargs (**kwargs).
+        This does not include varkwargs (\*\*kwargs).
         """
         return self._kwonlyargcount
 
@@ -779,4 +782,13 @@ class Code:
         return instr in self.instrs
 
     def dis(self, file=None):
+        """
+        Print self via the stdlib ``dis`` module.
+
+        Parameters
+        ----------
+        file : file-like, optional
+            A file-like object into which we should print.
+            Defaults to sys.stdout.
+        """
         dis(self.to_pycode(), file=file)

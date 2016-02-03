@@ -5,5 +5,4 @@ from . import literals
 __all__ = [
     'asconstants',
     'literals',
-    'optimize',
 ]

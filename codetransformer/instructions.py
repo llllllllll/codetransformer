@@ -11,7 +11,7 @@ from .utils.immutable import immutableattr
 from .utils.no_default import no_default
 
 
-__all__ = ['Instruction'] + list(opmap)
+__all__ = ['Instruction'] + sorted(list(opmap))
 
 # The opcodes that use the co_names tuple.
 _uses_name = frozenset({
@@ -43,13 +43,12 @@ _uses_free = frozenset({
 })
 
 
-@abstractmethod
-class _notimplemented:
-    def __init__(self, name):
-        self._name = name
-
-    def __get__(self, instance, owner):
-        raise NotImplementedError(self._name)
+def _notimplemented(name):
+    @property
+    @abstractmethod
+    def _(self):
+        raise NotImplementedError(name)
+    return _
 
 
 @property
@@ -124,14 +123,17 @@ class InstructionMeta(ABCMeta, matchable):
 
 
 class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
-    """An abstraction of an instruction.
+    """
+    Base class for all instruction types.
 
     Parameters
     ----------
     arg : any, optional
+
         The argument for the instruction. This should be the actual value of
-        the argument, for example, if this is a ``LOAD_CONST``, use the
-        constant value, not the index that would appear in the bytecode.
+        the argument, for example, if this is a
+        :class:`~codetransformer.instructions.LOAD_CONST`, use the constant
+        value, not the index that would appear in the bytecode.
     """
     _no_arg = no_default
 
@@ -179,7 +181,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
 
     @classmethod
     def from_bytes(cls, bs):
-        """Create a sequence of ``Instruction`` objects from bytes.
+        """Create a sequence of :class:`Instruction` objects from bytes.
 
         Parameters
         ----------
@@ -208,10 +210,39 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
 
     @classmethod
     def from_opcode(cls, opcode, arg=_no_arg):
+        """
+        Create an instruction from an opcode and raw argument.
+
+        Parameters
+        ----------
+        opcode : int
+            Opcode for the instruction to create.
+        arg : int, optional
+            The raw argument for the instruction to create, if any.
+        """
         return type(cls)(opname[opcode], (cls,), {}, opcode=opcode)(arg)
 
     @property
     def stack_effect(self):
+        """
+        The net effect of executing this instruction on the interpreter stack.
+
+        Instructions that pop values off the stack have negative stack effect
+        equal to the number of popped values.
+
+        Instructions that push values onto the stack have positive stack effect
+        equal to the number of popped values.
+
+        Examples
+        --------
+        - LOAD_{FAST,NAME,GLOBAL,DEREF} push one value onto the stack.
+          They have a stack_effect of 1.
+        - POP_JUMP_IF_{TRUE,FALSE} always pop one value off the stack.
+          They have a stack effect of -1.
+        - BINARY_* instructions pop two instructions off the stack, apply a
+          binary operator, and push the resulting value onto the stack.
+          They have a stack effect of -1 (-2 values consumed + 1 value pushed).
+        """
         return stack_effect(
             self.opcode,
             *((self.arg if isinstance(self.arg, int) else 0,)
@@ -234,7 +265,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
 
         Notes
         -----
-        This is a separate concept from instruction identity. Two seperate
+        This is a separate concept from instruction identity. Two separate
         instructions can be equivalent without being the same exact instance.
         This means that two equivalent instructions can be at different points
         in the bytecode or be targeted by different jumps.
@@ -395,6 +426,14 @@ for name, opcode in opmap.items():
 
     if class_.is_jmp:
         class_._normalize_arg = _check_jmp_arg
+
+    class_.__doc__ = (
+        """
+        See Also
+        --------
+        dis.{name}
+        """.format(name=name),
+    )
 
     del class_
 

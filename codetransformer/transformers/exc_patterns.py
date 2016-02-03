@@ -45,7 +45,7 @@ class pattern_matched_exceptions(CodeTransformer):
 
     Parameters
     ----------
-    matcher : function, optional, default is `transformers.exc_patterns.match`.
+    matcher : function, optional
         A function accepting an expression and the values of sys.exc_info,
         returning True if the exception info "matches" the expression.
 

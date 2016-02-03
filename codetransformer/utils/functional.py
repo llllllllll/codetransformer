@@ -1,3 +1,10 @@
+"""
+codetransformer.utils.functional
+--------------------------------
+
+Utilities for functional programming.
+"""
+
 from toolz import complement, flip
 
 

@@ -10,8 +10,12 @@ import pytest
 from toolz.curried.operator import add
 
 from codetransformer import a as show  # noqa
-from ..decompiler import DecompilationContext, paramnames, pycode_to_body
-
+from ..decompiler import (
+    DecompilationContext,
+    decompile,
+    paramnames,
+    pycode_to_body,
+)
 
 _current_test = None
 
@@ -112,6 +116,23 @@ NAME_BINDS = [
     "(a,)",
     "a, ((b, c, d), (e, f))",
 ]
+
+
+def test_decompile():
+    def foo(a, b, *, c):
+        return a + b + c
+    decompiled = decompile(foo)
+
+    # NOTE: We can't reliably match the ast for defaults and annotations, since
+    # we can't tell how they were defined.
+    s = dedent(
+        """
+        def foo(a, b, *, c):
+            return a + b + c
+        """
+    )
+    compiled = parse(s)
+    compare(decompiled, compiled.body[0])
 
 
 def test_trivial_expr():
