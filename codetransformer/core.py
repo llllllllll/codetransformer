@@ -53,7 +53,7 @@ class CodeTransformerMeta(type):
 
 
 class CodeTransformer(metaclass=CodeTransformerMeta):
-    """A code object transformer, simmilar to the NodeTransformer
+    """A code object transformer, similar to the NodeTransformer
     from the ast module.
 
     Attributes
