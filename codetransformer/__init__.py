@@ -20,6 +20,21 @@ __version__ = get_versions()['version']
 del get_versions
 
 
+def load_ipython_extension(ipython):
+
+    def dis_magic(line, cell=None):
+        if cell is None:
+            return d(line)
+        return d(cell)
+    ipython.register_magic_function(dis_magic, 'line_cell', 'dis')
+
+    def ast_magic(line, cell=None):
+        if cell is None:
+            return a(line)
+        return a(cell)
+    ipython.register_magic_function(ast_magic, 'line_cell', 'ast')
+
+
 __all__ = [
     'a',
     'd',
