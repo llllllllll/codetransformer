@@ -16,7 +16,7 @@ setup(
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     description='Python code object transformers',
-    author='Joe Jevnik',
+    author='Joe Jevnik and Scott Sanderson',
     author_email='joejev@gmail.com',
     packages=find_packages(),
     long_description=long_description,
