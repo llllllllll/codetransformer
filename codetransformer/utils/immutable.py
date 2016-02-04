@@ -6,7 +6,9 @@ Utilities for creating and working with immutable objects.
 """
 
 from collections import ChainMap
-from itertools import starmap
+from inspect import getfullargspec
+from itertools import starmap, repeat
+from textwrap import dedent
 from weakref import WeakKeyDictionary
 
 
@@ -74,11 +76,13 @@ def initialize_slot(obj, name, value):
         object_setattr(obj, name, value)
 
 
-def _create_init(slots, defaults):
+def _create_init(name, slots, defaults):
     """Create the __init__ function for an immutable object.
 
     Parameters
     ----------
+    name : str
+        The name of the immutable class.
     slots : iterable of str
         The __slots__ field from the class.
     defaults : dict or None
@@ -145,15 +149,21 @@ def _create_init(slots, defaults):
         return _no_arg_init, ()
 
     ns = {'__initialize_slot': initialize_slot}
-    slotnames = tuple(s.strip('*') for s in slots)
+    # filter out lone star
+    slotnames = tuple(filter(None, (s.strip('*') for s in slots)))
     # We are using exec here so that we can later inspect the call signature
     # of the __init__. This makes the positional vs keywords work as intended.
     # This is totally reasonable, no h8 m8!
     exec(
-        'def __init__(__self, {args}):    \n    {assign}'.format(
+        'def __init__(_{name}__self, {args}):    \n    {assign}'.format(
+            name=name,
             args=', '.join(slots),
             assign='\n    '.join(
-                map('__initialize_slot(__self, "{0}", {0})'.format, slotnames),
+                map(
+                    '__initialize_slot(_{1}__self, "{0}", {0})'.format,
+                    slotnames,
+                    repeat(name),
+                ),
             ),
         ),
         ns,
@@ -178,24 +188,103 @@ def _wrapinit(init):
     wrapped : callable
         The wrapped init method.
     """
-    def __init__(*args, **kwargs):
-        self = args[0]  # they could name this whatever and this breaks kwargs.
+    try:
+        spec = getfullargspec(init)
+    except TypeError:
+        # we cannot preserve the type signature.
+        def __init__(*args, **kwargs):
+            self = args[0]
+            __setattr__._initializing.add(self)
+            init(*args, **kwargs)
+            __setattr__._initializing.remove(self)
+            _check_missing_slots(self)
 
-        __setattr__._initializing.add(self)
-        init(*args, **kwargs)
-        __setattr__._initializing.remove(self)
+        return __init__
 
-        missing_slots = tuple(
-            filter(lambda s: not hasattr(self, s), self.__slots__),
+    args = spec.args
+    varargs = spec.varargs
+    if not (args or varargs):
+        raise TypeError(
+            "%r must accept at least one positional argument for 'self'" %
+            getattr(init, '__qualname__', getattr(init, '__name__', init)),
         )
-        if missing_slots:
-            raise TypeError(
-                'not all slots initialized in __init__, missing: {0}'.format(
-                    missing_slots,
-                ),
-            )
 
+    if not args:
+        self = '%s[0]' % varargs
+        forward = argspec = '*' + varargs
+    else:
+        self = args[0]
+        forward = argspec = ', '.join(args)
+
+    if args and varargs:
+        forward = '%s, *%s' % (forward, spec.varargs)
+        argspec = '%s, *%s' % (argspec, spec.varargs)
+    if spec.kwonlyargs:
+        forward = '%s, %s' % (
+            forward,
+            ', '.join(map('{0}={0}'.format, spec.kwonlyargs))
+        )
+        argspec = '%s,%s%s' % (
+            argspec,
+            '*, ' if not spec.varargs else '',
+            ', '.join(spec.kwonlyargs),
+        )
+    if spec.varkw:
+        forward = '%s, **%s' % (forward, spec.varkw)
+        argspec = '%s, **%s' % (argspec, spec.varkw)
+
+    ns = {
+        '__init': init,
+        '__initializing': __setattr__._initializing,
+        '__check_missing_slots': _check_missing_slots,
+    }
+    exec(
+        dedent(
+            """\
+            def __init__({argspec}):
+                __initializing.add({self})
+                __init({forward})
+                __initializing.remove({self})
+                __check_missing_slots({self})
+            """.format(
+                argspec=argspec,
+                self=self,
+                forward=forward,
+            ),
+        ),
+        ns,
+    )
+    __init__ = ns['__init__']
+    __init__.__defaults__ = spec.defaults
+    __init__.__kwdefaults__ = spec.kwonlydefaults
+    __init__.__annotations__ = spec.annotations
     return __init__
+
+
+def _check_missing_slots(ob):
+    """Check that all slots have been initialized when a custom __init__ method
+    is provided.
+
+    Parameters
+    ----------
+    ob : immutable
+        The instance that was just initialized.
+
+    Raises
+    ------
+    TypeError
+        Raised when the instance has not set values that are named in the
+        __slots__.
+    """
+    missing_slots = tuple(
+        filter(lambda s: not hasattr(ob, s), ob.__slots__),
+    )
+    if missing_slots:
+        raise TypeError(
+            'not all slots initialized in __init__, missing: {0}'.format(
+                missing_slots,
+            ),
+        )
 
 
 def __setattr__(self, name, value):
@@ -228,7 +317,9 @@ class ImmutableMeta(type):
             dict_['__init__'] = _wrapinit(dict_['__init__'])
         except KeyError:
             dict_['__init__'], dict_['__slots__'] = _create_init(
-                dict_['__slots__'], defaults,
+                name,
+                dict_['__slots__'],
+                defaults,
             )
 
         dict_['__setattr__'] = __setattr__
