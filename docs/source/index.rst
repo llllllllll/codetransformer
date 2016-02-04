@@ -35,6 +35,7 @@ Contents:
    :maxdepth: 2
 
    code-objects.rst
+   patterns.rst
    appendix.rst
 
 

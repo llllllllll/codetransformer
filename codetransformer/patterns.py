@@ -6,6 +6,7 @@ from .utils.instance import instance
 from .utils.immutable import immutable
 
 
+#: The default startcode for patterns.
 DEFAULT_STARTCODE = 0
 mcompile = methodcaller('mcompile')
 
@@ -162,7 +163,7 @@ class seq(immutable, matchable):
 
     Parameters
     ----------
-    *matchables : iterable of matchable
+    \*matchables : iterable of matchable
         The matchables to match against.
     """
     __slots__ = 'matchables',
@@ -232,7 +233,7 @@ class pattern(immutable):
 
     Parameters
     ----------
-    *matchables : iterable of matchable
+    \*matchables : iterable of matchable
         The type of instructions to match against.
     startcodes : container of any
         The startcodes where this pattern should be tried.

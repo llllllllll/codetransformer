@@ -50,7 +50,19 @@ For details on particular instructions, see `the dis stdlib module docs.`_
 
 ``codetransformer.patterns``
 ----------------------------
+
 .. autoclass:: codetransformer.patterns.pattern
+
+.. autodata:: codetransformer.patterns.DEFAULT_STARTCODE
+
+DSL Objects
+~~~~~~~~~~~
+
+.. autodata:: codetransformer.patterns.matchany
+.. autoclass:: codetransformer.patterns.seq
+.. autodata:: codetransformer.patterns.var
+.. autodata:: codetransformer.patterns.plus
+.. autodata:: codetransformer.patterns.option
 
 ``codetransformer.utils``
 -------------------------
