@@ -2,6 +2,8 @@
 from setuptools import setup, find_packages
 import sys
 
+import versioneer
+
 long_description = ''
 
 if 'upload' in sys.argv:
@@ -11,7 +13,8 @@ if 'upload' in sys.argv:
 
 setup(
     name='codetransformer',
-    version='0.6.0',
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
     description='Python code object transformers',
     author='Joe Jevnik',
     author_email='joejev@gmail.com',
