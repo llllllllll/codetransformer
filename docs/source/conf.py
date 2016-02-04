@@ -57,7 +57,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'codetransformer'
-copyright = '2015, Joe Jevnik and Scott Sanderson'
+copyright = '2016, Joe Jevnik and Scott Sanderson'
 author = 'Joe Jevnik and Scott Sanderson'
 
 # The version info for the project you're documenting, acts as replacement for
