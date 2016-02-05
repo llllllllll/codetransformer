@@ -36,6 +36,7 @@ Contents:
 
    code-objects.rst
    patterns.rst
+   magics.rst
    appendix.rst
 
 
