@@ -609,7 +609,9 @@ class Code:
         # We must sort to preserve the order between calls.
         # The set comprehension is to drop the duplicates.
         return self._argnames + tuple(sorted({
-            instr.arg for instr in self.instrs if instr.uses_varname
+            instr.arg
+            for instr in self.instrs
+            if instr.uses_varname and instr.arg not in self._argnames
         }))
 
     @property
