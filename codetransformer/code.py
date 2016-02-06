@@ -358,6 +358,22 @@ class Code:
         )
 
     @classmethod
+    def from_pyfunc(cls, f):
+        """Create a Code object from a python function object.
+
+        Parameters
+        ----------
+        f : function
+            The function from which to construct a code object.
+
+        Returns
+        -------
+        code : Code
+            A Code object representing f.__code__.
+        """
+        return cls.from_pycode(f.__code__)
+
+    @classmethod
     def from_pycode(cls, co):
         """Create a Code object from a python code object.
 
