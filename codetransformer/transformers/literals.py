@@ -338,10 +338,17 @@ def overloaded_build(type_, add_name=None):
         literal types.
     """
     typename = type_.__name__
-    dict_ = OrderedDict()
+    instrname = 'BUILD_' + typename.upper()
+    dict_ = OrderedDict(
+        __doc__=dedent(
+            """
+            A CodeTransformer for overloading {name} instructions.
+            """.format(name=instrname)
+        )
+    )
 
     try:
-        build_instr = getattr(instructions, 'BUILD_' + typename.upper())
+        build_instr = getattr(instructions, instrname)
     except AttributeError:
         raise TypeError("type %s is not buildable" % typename)
 
