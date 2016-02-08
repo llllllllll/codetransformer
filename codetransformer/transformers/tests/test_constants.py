@@ -1,3 +1,4 @@
+import os
 from sys import _getframe
 from types import CodeType
 
@@ -5,6 +6,9 @@ import pytest
 
 from codetransformer.code import Code
 from ..constants import asconstants
+
+
+basename = os.path.basename(__file__)
 
 
 def test_global():
@@ -54,7 +58,7 @@ def test_store():
     line = _getframe().f_lineno - 2
     assert (
         str(e.value) ==
-        "can't assign to constant name 'a' (%s line %d)" % (__file__, line),
+        "can't assign to constant name 'a' (%s, line %d)" % (basename, line)
     )
 
 
@@ -67,7 +71,7 @@ def test_delete():
     line = _getframe().f_lineno - 2
     assert (
         str(e.value) ==
-        "can't delete constant name 'a' (%s line %d)" % (__file__, line),
+        "can't delete constant name 'a' (%s, line %d)" % (basename, line)
     )
 
 
