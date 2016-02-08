@@ -1,6 +1,23 @@
 API Reference
 =============
 
+``codetransformer.transformers``
+--------------------------------
+
+.. automodule:: codetransformer.transformers
+   :members:
+
+.. autodata:: islice_literals
+   :annotation:
+
+.. data:: bytearray_literals
+
+   A transformer that converts :class:`bytes` literals to :class:`bytearray`.
+
+.. data:: decimal_literals
+
+   A transformer that converts :class:`float` literals to :class:`~decimal.Decimal`.
+
 ``codetransformer.code``
 ------------------------
 
@@ -26,27 +43,6 @@ For details on particular instructions, see `the dis stdlib module docs.`_
    :members:
    :undoc-members:
 
-
-``codetransformer.transformers``
---------------------------------
-
-.. automodule:: codetransformer.transformers
-   :members:
-
-.. automodule:: codetransformer.transformers.literals
-   :members:
-   :exclude-members: patterndispatcher
-
-.. autoclass:: codetransformer.transformers.literals.overloaded_strs
-.. autoclass:: codetransformer.transformers.literals.overloaded_floats
-.. autoclass:: codetransformer.transformers.literals.overloaded_ints
-.. autoclass:: codetransformer.transformers.literals.overloaded_complexes
-
-.. autoclass:: codetransformer.transformers.literals.haskell_strs
-.. autoclass:: codetransformer.transformers.literals.bytearray_literals
-.. autoclass:: codetransformer.transformers.literals.decimal_literals
-
-.. autoclass:: codetransformer.transformers.exc_patterns.pattern_matched_exceptions
 
 ``codetransformer.patterns``
 ----------------------------
