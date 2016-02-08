@@ -66,9 +66,9 @@ def test_string_in_nested_const():
 
     @interpolated_strings(transform_str=True)
     def foo(a, b):
-        return ("{a}", (("{b}",), "{a} {b}"))
+        return ("{a}", (("{b}",), "{a} {b}"), (1, 2))
 
-    assert foo(1, 2) == ("1", (("2",), "1 2"))
+    assert foo(1, 2) == ("1", (("2",), "1 2"), (1, 2))
 
     @interpolated_strings(transform_str=True)
     def bar(a):

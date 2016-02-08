@@ -78,6 +78,7 @@ class interpolated_strings(CodeTransformer):
         if not any(filter(should_transform, flatten(seq))):
             # Tuple doesn't contain any transformable strings. Ignore.
             yield LOAD_CONST(seq)
+            return
 
         for const in seq:
             if should_transform(const):
