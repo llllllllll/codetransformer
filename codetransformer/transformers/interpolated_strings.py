@@ -25,6 +25,16 @@ class interpolated_strings(CodeTransformer):
     transform_str : bool, optional
         Whether to interpolate values into unicode strings.
         Default is False.
+
+    Example
+    -------
+    >>> @interpolated_strings()
+    ... def foo(a, b):
+    ...     c = a + b
+    ...     return b"{a} + {b} = {c}"
+    ...
+    >>> foo(1, 2)
+    "1 + 2 = 3"
     """
 
     def __init__(self, *, transform_bytes=True, transform_str=False):
