@@ -34,7 +34,7 @@ class interpolated_strings(CodeTransformer):
     ...     return b"{a} + {b} = {c}"
     ...
     >>> foo(1, 2)
-    "1 + 2 = 3"
+    '1 + 2 = 3'
     """
 
     def __init__(self, *, transform_bytes=True, transform_str=False):
