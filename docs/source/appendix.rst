@@ -33,6 +33,12 @@ For details on particular instructions, see `the dis stdlib module docs.`_
 .. automodule:: codetransformer.transformers
    :members:
 
+.. automodule:: codetransformer.transformers.exc_patterns
+   :members:
+
+.. automodule:: codetransformer.trasnformers.interpolated_strings
+   :members:
+
 .. automodule:: codetransformer.transformers.literals
    :members:
    :exclude-members: patterndispatcher
@@ -46,7 +52,6 @@ For details on particular instructions, see `the dis stdlib module docs.`_
 .. autoclass:: codetransformer.transformers.literals.bytearray_literals
 .. autoclass:: codetransformer.transformers.literals.decimal_literals
 
-.. autoclass:: codetransformer.transformers.exc_patterns.pattern_matched_exceptions
 
 ``codetransformer.patterns``
 ----------------------------
