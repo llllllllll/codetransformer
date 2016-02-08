@@ -36,7 +36,10 @@ For details on particular instructions, see `the dis stdlib module docs.`_
 .. automodule:: codetransformer.transformers.exc_patterns
    :members:
 
-.. automodule:: codetransformer.trasnformers.interpolated_strings
+.. automodule:: codetransformer.transformers.interpolated_strings
+   :members:
+
+.. automodule:: codetransformer.transformers.precomputed_slices
    :members:
 
 .. automodule:: codetransformer.transformers.literals
