@@ -94,3 +94,28 @@ def ffill(iterable):
         else:
             previous = e
             yield e
+
+
+def flatten(seq, *, recurse_types=(tuple, list, set, frozenset)):
+    """
+    Convert a (possibly nested) iterator into a flattened iterator.
+
+    Parameters
+    ----------
+    seq : iterable
+        The sequence to flatten.
+    recurse_types, optional
+        Types to recursively flatten.
+        Defaults to (tuple, list, set, frozenset).
+
+    >>> list(flatten((1, (2, 3), ((4,), 5))))
+    [1, 2, 3, 4, 5]
+
+    >>> list(flatten(["abc", "def"], recurse_types=(str,)))
+    ['a', 'b', 'c', 'd', 'e', 'f']
+    """
+    for elem in seq:
+        if isinstance(elem, recurse_types):
+            yield from flatten(elem)
+        else:
+            yield elem

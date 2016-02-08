@@ -60,3 +60,19 @@ def test_no_cross_pollination():
         return u, b
 
     assert ignore_bytes(1) == ("1", b"{a}")
+
+
+def test_string_in_nested_const():
+
+    @interpolated_strings(transform_str=True)
+    def foo(a, b):
+        return ("{a}", (("{b}",), "{a} {b}"))
+
+    assert foo(1, 2) == ("1", (("2",), "1 2"))
+
+    @interpolated_strings(transform_str=True)
+    def bar(a):
+        return "1" in {"{a}"}
+
+    assert bar(1)
+    assert not bar(2)
