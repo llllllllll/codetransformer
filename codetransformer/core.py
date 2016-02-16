@@ -3,6 +3,12 @@ from contextlib import contextmanager
 from ctypes import py_object, pythonapi
 from itertools import chain
 from types import CodeType, FunctionType
+from weakref import WeakKeyDictionary
+
+try:
+    import threading
+except ImportError:
+    import dummy_threading as threading
 
 from .code import Code
 from .instructions import LOAD_CONST, STORE_FAST, LOAD_FAST
@@ -11,6 +17,7 @@ from .patterns import (
     patterndispatcher,
     DEFAULT_STARTCODE,
 )
+from .utils.instance import instance
 
 
 _cell_new = pythonapi.PyCell_New
@@ -48,7 +55,18 @@ class NoContext(Exception):
     attribute was accessed outside of a code context.
     """
     def __init__(self):
-        return super().__init__('no context')
+        return super().__init__('no active transformation context')
+
+
+class Context:
+    """Empty object for holding the transformation context.
+    """
+    def __init__(self, code):
+        self.code = code
+        self.startcode = DEFAULT_STARTCODE
+
+    def __repr__(self):  # pragma: no cover
+        return '<%s: %r>' % (type(self).__name__, self.__dict__)
 
 
 class CodeTransformerMeta(type):
@@ -81,11 +99,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
     ----------
     code
     """
-    __slots__ = '_code_stack', '_startcode_stack'
-
-    def __init__(self):
-        self._code_stack = []
-        self._startcode_stack = []
+    __slots__ = '__weakref__',
 
     def transform_consts(self, consts):
         """transformer for the co_consts field.
@@ -205,33 +219,67 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
             closure,
         )
 
+    @instance
+    class _context_stack(threading.local):
+        """Thread safe transformation context stack.
+
+        Each thread will get it's own ``WeakKeyDictionary`` that maps
+        instances to a stack of ``Context`` objects. When this descriptor
+        is looked up we first try to get the weakkeydict off of the thread
+        local storage. If it doesn't exist we make a new map. Then we lookup
+        our instance in this map. If it doesn't exist yet create a new stack
+        (as an empty list).
+
+        This allows a single instance of ``CodeTransformer`` to be used
+        recursivly to transform code objects in a thread safe way while
+        still being able to use a stateful context.
+        """
+        def __get__(self, instance, owner):
+            try:
+                stacks = self._context_stacks
+            except AttributeError:
+                stacks = self._context_stacks = WeakKeyDictionary()
+
+            if instance is None:
+                # when looked up off the class return the current threads
+                # context stacks map
+                return stacks
+
+            return stacks.setdefault(instance, [])
+
     @contextmanager
     def _new_context(self, code):
-        self._code_stack.append(code)
-        self._startcode_stack.append(DEFAULT_STARTCODE)
+        self._context_stack.append(Context(code))
         try:
             yield
         finally:
-            self._code_stack.pop()
-            self._startcode_stack.pop()
+            self._context_stack.pop()
+
+    @property
+    def context(self):
+        """Lookup the current transformation context.
+
+        Raises
+        ------
+        NoContext
+            Raised when there is no active transformation context.
+        """
+        try:
+            return self._context_stack[-1]
+        except IndexError:
+            raise NoContext()
 
     @property
     def code(self):
         """The code object we are currently manipulating.
         """
-        try:
-            return self._code_stack[-1]
-        except IndexError:
-            raise NoContext()
+        return self.context.code
 
     @property
     def startcode(self):
         """The startcode we are currently in.
         """
-        try:
-            return self._startcode_stack[-1]
-        except IndexError:
-            raise NoContext()
+        return self.context.startcode
 
     def begin(self, startcode):
         """Begin a new startcode.
@@ -241,9 +289,4 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
         startcode : any
             The startcode to begin.
         """
-        try:
-            # "beginning" a new startcode changes the current startcode.
-            # Here we are mutating the current context's startcode.
-            self._startcode_stack[-1] = startcode
-        except IndexError:
-            raise NoContext()
+        self.context.startcode = startcode
