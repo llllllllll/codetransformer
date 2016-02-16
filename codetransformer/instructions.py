@@ -183,35 +183,6 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         return self
 
     @classmethod
-    def from_bytes(cls, bs):
-        """Create a sequence of :class:`Instruction` objects from bytes.
-
-        Parameters
-        ----------
-        bs : bytes
-            The bytecode to consume.
-
-        Yields
-        ------
-        instr : Instruction
-            The bytecode converted into instructions.
-        """
-        it = iter(bs)
-        for b in it:
-            arg = None
-            if b >= HAVE_ARGUMENT:
-                arg = int.from_bytes(
-                    next(it).to_bytes(1, 'little') +
-                    next(it).to_bytes(1, 'little'),
-                    'little',
-                )
-
-            try:
-                yield cls.from_opcode(b, arg)
-            except TypeError:
-                raise ValueError('Invalid opcode: {}'.format(b))
-
-    @classmethod
     def from_opcode(cls, opcode, arg=_no_arg):
         """
         Create an instruction from an opcode and raw argument.
