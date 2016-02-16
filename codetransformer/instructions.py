@@ -144,6 +144,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
             )
         self.arg = self._normalize_arg(arg)
         self._target_of = set()
+        self._stolen_by = None  # used for lnotab recalculation
 
     def __repr__(self):
         arg = self.arg
@@ -176,6 +177,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         -----
         This mutates self and ``instr`` inplace.
         """
+        instr._stolen_by = self
         for jmp in instr._target_of:
             jmp.arg = self
         self._target_of = instr._target_of

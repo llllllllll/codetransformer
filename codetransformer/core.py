@@ -22,6 +22,27 @@ def _a_if_not_none(a, b):
     return a if a is not None else b
 
 
+def _new_lnotab(instrs, lnotab):
+    """The updated lnotab after the instructions have been transformed.
+
+    Parameters
+    ----------
+    instrs : iterable[Instruction]
+        The new instructions.
+    lnotab : dict[Instruction -> int]
+        The lnotab for the old code object.
+
+    Returns
+    -------
+    new_lnotab : dict[Instruction -> int]
+        The post transform lnotab.
+    """
+    return {
+        lno: _a_if_not_none(instr._stolen_by, instr)
+        for lno, instr in lnotab.items()
+    }
+
+
 class NoContext(Exception):
     """Exception raised to indicate that the ``code` or ``startcode``
     attribute was accessed outside of a code context.
@@ -112,7 +133,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
 
     del _id
 
-    def transform(self, code, *, name=None, filename=None, lnotab=None):
+    def transform(self, code, *, name=None, filename=None):
         """Transform a codetransformer.Code object applying the transforms.
 
         Parameters
@@ -123,8 +144,6 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
             The new name for this code object.
         filename : str, optional
             The new filename for this code object.
-        lnotab : bytes, optional
-            The new lnotab for this code object.
 
         Returns
         -------
@@ -166,7 +185,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
                 name=name if name is not None else code.name,
                 filename=filename if filename is not None else code.filename,
                 firstlineno=code.firstlineno,
-                lnotab=lnotab if lnotab is not None else code.lnotab,
+                lnotab=_new_lnotab(post_transform, code.lnotab),
                 nested=code.is_nested,
                 coroutine=code.is_coroutine,
                 iterable_coroutine=code.is_iterable_coroutine,
