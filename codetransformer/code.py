@@ -199,6 +199,46 @@ def _freevar_argname(arg, cellvars, freevars):
     return freevars[arg - len_cellvars]
 
 
+def pycode(argcount,
+           kwonlyargcount,
+           nlocals,
+           stacksize,
+           flags,
+           codestring,
+           constants,
+           names,
+           varnames,
+           filename,
+           name,
+           firstlineno,
+           lnotab,
+           freevars=(),
+           cellvars=()):
+    """types.CodeType constructor that accepts keyword arguments.
+
+    See Also
+    --------
+    types.CodeType
+    """
+    return CodeType(
+        argcount,
+        kwonlyargcount,
+        nlocals,
+        stacksize,
+        flags,
+        codestring,
+        constants,
+        names,
+        varnames,
+        filename,
+        name,
+        firstlineno,
+        lnotab,
+        freevars,
+        cellvars,
+    )
+
+
 class Code:
     """A higher abstraction over python's CodeType.
 
@@ -218,14 +258,8 @@ class Code:
         The first line number of the code in this code object.
     lnotab : dict[Instruction -> int], optional
         The mapping from instruction to the line that it starts.
-    nested : bool, optional
-        Is this code object nested in another code object?
-    coroutine : bool, optional
-        Is this code object a coroutine (async def)?
-    iterable_coroutine : bool, optional
-        Is this code object a coroutine iterator?
-    new_locals : bool, optional
-        Should this code object construct new locals?
+    flags : dict[str -> bool], optional
+        Any flags to set. This updates the default flag set.
 
     Attributes
     ----------
@@ -276,10 +310,7 @@ class Code:
                  filename='<code>',
                  firstlineno=1,
                  lnotab=None,
-                 nested=False,
-                 coroutine=False,
-                 iterable_coroutine=False,
-                 new_locals=False):
+                 flags=None):
 
         instrs = tuple(instrs)  # strictly evaluate any generators.
 
@@ -335,27 +366,30 @@ class Code:
         self._filename = filename
         self._firstlineno = firstlineno
         self._lnotab = lnotab or {}
-        self._flags = Flag.pack(
-            CO_OPTIMIZED=True,
-            CO_NEWLOCALS=new_locals,
-            CO_VARARGS=varg is not None,
-            CO_VARKEYWORDS=kwarg is not None,
-            CO_NESTED=nested,
-            CO_GENERATOR=any(
-                isinstance(instr, (YIELD_VALUE, YIELD_FROM))
-                for instr in instrs
+        self._flags = Flag.pack(**dict(
+            dict(
+                CO_OPTIMIZED=True,
+                CO_NEWLOCALS=True,
+                CO_VARARGS=varg is not None,
+                CO_VARKEYWORDS=kwarg is not None,
+                CO_NESTED=False,
+                CO_GENERATOR=any(
+                    isinstance(instr, (YIELD_VALUE, YIELD_FROM))
+                    for instr in instrs
+                ),
+                CO_NOFREE=not any(map(op.attrgetter('uses_free'), instrs)),
+                CO_COROUTINE=False,
+                CO_ITERABLE_COROUTINE=False,
+                CO_FUTURE_DIVISION=False,
+                CO_FUTURE_ABSOLUTE_IMPORT=False,
+                CO_FUTURE_WITH_STATEMENT=False,
+                CO_FUTURE_PRINT_FUNCTION=False,
+                CO_FUTURE_UNICODE_LITERALS=False,
+                CO_FUTURE_BARRY_AS_BDFL=False,
+                CO_FUTURE_GENERATOR_STOP=False,
             ),
-            CO_NOFREE=not any(map(op.attrgetter('uses_free'), instrs)),
-            CO_COROUTINE=coroutine,
-            CO_ITERABLE_COROUTINE=iterable_coroutine,
-            CO_FUTURE_DIVISION=False,
-            CO_FUTURE_ABSOLUTE_IMPORT=False,
-            CO_FUTURE_WITH_STATEMENT=False,
-            CO_FUTURE_PRINT_FUNCTION=False,
-            CO_FUTURE_UNICODE_LITERALS=False,
-            CO_FUTURE_BARRY_AS_BDFL=False,
-            CO_FUTURE_GENERATOR_STOP=False,
-        )
+            **flags or {}
+        ))
 
     @classmethod
     def from_pyfunc(cls, f):
@@ -454,10 +488,7 @@ class Code:
             lnotab={
                 lno: sparse_instrs[off] for off, lno in findlinestarts(co)
             },
-            nested=flags['CO_NESTED'],
-            coroutine=flags['CO_COROUTINE'],
-            iterable_coroutine=flags['CO_ITERABLE_COROUTINE'],
-            new_locals=flags['CO_NEWLOCALS'],
+            flags=flags,
         )
 
     def to_pycode(self):

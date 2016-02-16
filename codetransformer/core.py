@@ -186,9 +186,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
                 filename=filename if filename is not None else code.filename,
                 firstlineno=code.firstlineno,
                 lnotab=_new_lnotab(post_transform, code.lnotab),
-                nested=code.is_nested,
-                coroutine=code.is_coroutine,
-                iterable_coroutine=code.is_iterable_coroutine,
+                flags=code.flags,
             )
 
     def __call__(self, f, *,
