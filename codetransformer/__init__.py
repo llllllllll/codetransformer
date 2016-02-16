@@ -20,7 +20,7 @@ __version__ = get_versions()['version']
 del get_versions
 
 
-def load_ipython_extension(ipython):
+def load_ipython_extension(ipython):  # pragma: no cover
 
     def dis_magic(line, cell=None):
         if cell is None:
