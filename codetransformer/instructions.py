@@ -192,7 +192,12 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         opcode : int
             Opcode for the instruction to create.
         arg : int, optional
-            The raw argument for the instruction to create, if any.
+            The argument for the instruction.
+
+        Returns
+        -------
+        intsr : Instruction
+            An instance of the instruction named by ``opcode``.
         """
         return type(cls)(opname[opcode], (cls,), {}, opcode=opcode)(arg)
 
