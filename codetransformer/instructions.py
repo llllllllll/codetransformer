@@ -149,7 +149,7 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         arg = self.arg
         return '{op}{arg}'.format(
             op=self.opname,
-            arg='(' + repr(arg) + ')' if self.arg is not self._no_arg else '',
+            arg='(%r)' % arg if self.arg is not self._no_arg else '',
         )
 
     @staticmethod
@@ -161,7 +161,6 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
 
         This makes anything that would have jumped to `instr` jump to
         this Instruction instead.
-        This mutates self and ``instr`` inplace.
 
         Parameters
         ----------
@@ -172,6 +171,10 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         -------
         self : Instruction
             The instruction that owns this method.
+
+        Notes
+        -----
+        This mutates self and ``instr`` inplace.
         """
         for jmp in instr._target_of:
             jmp.arg = self
