@@ -144,12 +144,13 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
             )
         self.arg = self._normalize_arg(arg)
         self._target_of = set()
+        self._stolen_by = None  # used for lnotab recalculation
 
     def __repr__(self):
         arg = self.arg
         return '{op}{arg}'.format(
             op=self.opname,
-            arg='(' + repr(arg) + ')' if self.arg is not self._no_arg else '',
+            arg='(%r)' % arg if self.arg is not self._no_arg else '',
         )
 
     @staticmethod
@@ -161,7 +162,6 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
 
         This makes anything that would have jumped to `instr` jump to
         this Instruction instead.
-        This mutates self and ``instr`` inplace.
 
         Parameters
         ----------
@@ -172,41 +172,17 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         -------
         self : Instruction
             The instruction that owns this method.
+
+        Notes
+        -----
+        This mutates self and ``instr`` inplace.
         """
+        instr._stolen_by = self
         for jmp in instr._target_of:
             jmp.arg = self
         self._target_of = instr._target_of
         instr._target_of = set()
         return self
-
-    @classmethod
-    def from_bytes(cls, bs):
-        """Create a sequence of :class:`Instruction` objects from bytes.
-
-        Parameters
-        ----------
-        bs : bytes
-            The bytecode to consume.
-
-        Yields
-        ------
-        instr : Instruction
-            The bytecode converted into instructions.
-        """
-        it = iter(bs)
-        for b in it:
-            arg = None
-            if b >= HAVE_ARGUMENT:
-                arg = int.from_bytes(
-                    next(it).to_bytes(1, 'little') +
-                    next(it).to_bytes(1, 'little'),
-                    'little',
-                )
-
-            try:
-                yield cls.from_opcode(b, arg)
-            except TypeError:
-                raise ValueError('Invalid opcode: {}'.format(b))
 
     @classmethod
     def from_opcode(cls, opcode, arg=_no_arg):
@@ -218,7 +194,12 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
         opcode : int
             Opcode for the instruction to create.
         arg : int, optional
-            The raw argument for the instruction to create, if any.
+            The argument for the instruction.
+
+        Returns
+        -------
+        intsr : Instruction
+            An instance of the instruction named by ``opcode``.
         """
         return type(cls)(opname[opcode], (cls,), {}, opcode=opcode)(arg)
 
