@@ -224,6 +224,10 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
           binary operator, and push the resulting value onto the stack.
           They have a stack effect of -1 (-2 values consumed + 1 value pushed).
         """
+        if self.opcode == NOP.opcode:  # noqa
+            # dis.stack_effect is broken here
+            return 0
+
         return stack_effect(
             self.opcode,
             *((self.arg if isinstance(self.arg, int) else 0,)
