@@ -12,6 +12,7 @@ from codetransformer.instructions import BINARY_ADD, BINARY_MULTIPLY
 
 
 class add2mul(CodeTransformer):
+
     @pattern(BINARY_ADD)
-    def _add2mul(self, add_instr):
+    def _replace_add_with_multiply(self, add_instr):
         yield BINARY_MULTIPLY().steal(add_instr)
