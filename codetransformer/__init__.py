@@ -1,4 +1,4 @@
-from .code import Code
+from .code import Code, Flag
 from .core import CodeTransformer
 from . patterns import (
     matchany,
@@ -41,6 +41,7 @@ __all__ = [
     'display',
     'Code',
     'CodeTransformer',
+    'Flag',
     'instructions',
     'matchany',
     'not_',
