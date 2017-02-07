@@ -824,6 +824,19 @@ def test_simple_if():
     )
 
 
+def test_if_return():
+    check(
+        dedent(
+            """
+            def f():
+                if a:
+                    return b
+                return None
+            """
+        )
+    )
+
+
 def test_if_else():
     check(
         dedent(

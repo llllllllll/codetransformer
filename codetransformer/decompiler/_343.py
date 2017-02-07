@@ -188,6 +188,10 @@ def make_if_statement(instr, queue, stack, context):
         test_expr = ast.UnaryOp(op=ast.Not(), operand=test_expr)
 
     first_block = popwhile(op.is_not(instr.arg), queue, side='left')
+    if isinstance(first_block[-1], instrs.RETURN_VALUE):
+        body = instrs_to_body(first_block, context)
+        return ast.If(test=test_expr, body=body, orelse=[])
+
     jump_to_end = expect(
         first_block.pop(), instrs.JUMP_FORWARD, "at end of if-block"
     )
