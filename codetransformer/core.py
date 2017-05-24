@@ -231,7 +231,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
         (as an empty list).
 
         This allows a single instance of ``CodeTransformer`` to be used
-        recursivly to transform code objects in a thread safe way while
+        recursively to transform code objects in a thread safe way while
         still being able to use a stateful context.
         """
         def __get__(self, instance, owner):
