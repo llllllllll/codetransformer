@@ -20,12 +20,11 @@ that adds ``%%ast`` and ``%%dis`` magics.
 
 .. code-block:: python
 
-    In [1]: %load_ext codetransform
+    In [1]: %load_ext codetransformer
     In [2]: %%dis
        ...: def foo(a, b):
        ...:     return a + b
        ...:
-
     <module>
     --------
       1           0 LOAD_CONST               0 (<code object foo at 0x7f4c428a9b70, file "<show>", line 1>)
@@ -33,7 +32,9 @@ that adds ``%%ast`` and ``%%dis`` magics.
                   6 MAKE_FUNCTION            0
                   9 STORE_NAME               0 (foo)
                  12 LOAD_CONST               2 (None)
-                 15 RETURN_VAL    <module>.foo
+                 15 RETURN_VAL
+
+    <module>.foo
     ------------
       2           0 LOAD_FAST                0 (a)
                   3 LOAD_FAST                1 (b)
@@ -43,7 +44,6 @@ that adds ``%%ast`` and ``%%dis`` magics.
        ...: def foo(a, b):
        ...:     return a + b
        ...:
-
     Module(
       body=[
         FunctionDef(
