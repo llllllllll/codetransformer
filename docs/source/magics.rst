@@ -40,6 +40,8 @@ that adds ``%%ast`` and ``%%dis`` magics.
                   3 LOAD_FAST                1 (b)
                   6 BINARY_ADD
                   7 RETURN_VAL
+
+
    In [3]: %%ast
        ...: def foo(a, b):
        ...:     return a + b
