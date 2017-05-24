@@ -1,5 +1,5 @@
-``codetransformer 0.6``
-=========================
+``codetransformer``
+===================
 
 |build status|
 
