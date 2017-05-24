@@ -1,7 +1,10 @@
+import pytest
 import toolz.curried.operator as op
 
-from codetransformer import Code, CodeTransformer, pattern
+from codetransformer import CodeTransformer, Code, pattern
+from codetransformer.core import Context, NoContext
 from codetransformer.instructions import Instruction
+from codetransformer.patterns import DEFAULT_STARTCODE
 from codetransformer.utils.instance import instance
 
 
@@ -98,3 +101,30 @@ def test_updates_lnotab():
 
     # sanity check that the function is correct
     assert f() == c(f)()
+
+
+def test_context():
+    def f():  # pragma: no cover
+        pass
+
+    code = Code.from_pyfunc(f)
+    c = Context(code)
+
+    # check default attributes
+    assert c.code is code
+    assert c.startcode == DEFAULT_STARTCODE
+
+    # check that the object acts like a namespace
+    c.attr = 'test'
+    assert c.attr == 'test'
+
+
+def test_no_context():
+    @instance
+    class c(CodeTransformer):
+        pass
+
+    with pytest.raises(NoContext) as e:
+        c.context
+
+    assert str(e.value) == 'no active transformation context'

@@ -4,6 +4,7 @@ from enum import (
     IntEnum,
     unique,
 )
+from operator import attrgetter
 from re import escape
 
 from .patterns import matchable
@@ -13,7 +14,7 @@ from .utils.no_default import no_default
 
 __all__ = ['Instruction'] + sorted(list(opmap))
 
-# The opcodes that use the co_names tuple.
+# The instructions that use the co_names tuple.
 _uses_name = frozenset({
     'DELETE_ATTR',
     'DELETE_GLOBAL',
@@ -27,13 +28,13 @@ _uses_name = frozenset({
     'STORE_GLOBAL',
     'STORE_NAME',
 })
-# The opcodes that use the co_varnames tuple.
+# The instructions that use the co_varnames tuple.
 _uses_varname = frozenset({
     'LOAD_FAST',
     'STORE_FAST',
     'DELETE_FAST',
 })
-# The opcodes that use the free vars.
+# The instructions that use the co_freevars tuple.
 _uses_free = frozenset({
     'DELETE_DEREF',
     'LOAD_CLASSDEREF',
@@ -430,3 +431,16 @@ del metamap
 del _check_jmp_arg
 del _call_repr
 del _mk_call_init
+
+# The instructions that use the co_names tuple.
+uses_name = frozenset(
+    filter(attrgetter('uses_name'), Instruction.__subclasses__()),
+)
+# The instructions that use the co_varnames tuple.
+uses_varname = frozenset(
+    filter(attrgetter('uses_varname'), Instruction.__subclasses__()),
+)
+# The instructions that use the co_freevars tuple.
+uses_free = frozenset(
+    filter(attrgetter('uses_free'), Instruction.__subclasses__()),
+)

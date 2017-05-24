@@ -1,4 +1,4 @@
-from .code import Code
+from .code import Code, Flag
 from .core import CodeTransformer
 from . patterns import (
     matchany,
@@ -20,7 +20,7 @@ __version__ = get_versions()['version']
 del get_versions
 
 
-def load_ipython_extension(ipython):
+def load_ipython_extension(ipython):  # pragma: no cover
 
     def dis_magic(line, cell=None):
         if cell is None:
@@ -41,6 +41,7 @@ __all__ = [
     'display',
     'Code',
     'CodeTransformer',
+    'Flag',
     'instructions',
     'matchany',
     'not_',
