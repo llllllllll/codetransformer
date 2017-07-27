@@ -36,7 +36,7 @@ setup(
     install_requires=['toolz'],
     extras_require={
         'dev': [
-            'flake8==2.4.0',
+            'flake8==3.3.0',
             'pytest==2.8.4',
             'pytest-cov==2.2.1',
         ],
