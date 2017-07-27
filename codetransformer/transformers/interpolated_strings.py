@@ -1,6 +1,8 @@
 """
 A transformer implementing ruby-style interpolated strings.
 """
+import sys
+
 from codetransformer import pattern, CodeTransformer
 from codetransformer.instructions import (
     BUILD_TUPLE,
@@ -28,19 +30,26 @@ class interpolated_strings(CodeTransformer):
 
     Example
     -------
-    >>> @interpolated_strings()
+    >>> @interpolated_strings()  # doctest: +SKIP
     ... def foo(a, b):
     ...     c = a + b
     ...     return b"{a} + {b} = {c}"
     ...
-    >>> foo(1, 2)
+    >>> foo(1, 2)  # doctest: +SKIP
     '1 + 2 = 3'
     """
 
-    def __init__(self, *, transform_bytes=True, transform_str=False):
-        super().__init__()
-        self._transform_bytes = transform_bytes
-        self._transform_str = transform_str
+    if sys.version_info >= (3, 6):
+        def __init__(self, *, transform_bytes=True, transform_str=False):
+            raise NotImplementedError(
+                '%s is not supported on 3.6 or newer, just use f-strings' %
+                type(self).__name__,
+            )
+    else:
+        def __init__(self, *, transform_bytes=True, transform_str=False):
+            super().__init__()
+            self._transform_bytes = transform_bytes
+            self._transform_str = transform_str
 
     @property
     def types(self):

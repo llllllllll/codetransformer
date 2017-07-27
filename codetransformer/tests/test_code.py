@@ -2,6 +2,7 @@ from dis import dis
 from io import StringIO
 from itertools import product, chain
 import random
+import sys
 
 import pytest
 
@@ -146,13 +147,18 @@ def test_code_flags(sample_flags):
         'CO_NEWLOCALS': 'constructs_new_locals',
     }
     for flags in sample_flags:
+        if sys.version_info < (3, 6):
+            codestring = b'd\x00\x00S'  # return None
+        else:
+            codestring = b'd\x00S'  # return None
+
         code = Code.from_pycode(pycode(
             argcount=0,
             kwonlyargcount=0,
             nlocals=2,
             stacksize=0,
             flags=Flag.pack(**flags),
-            codestring=b'd\x00\x00S',  # return None
+            codestring=codestring,
             constants=(None,),
             names=(),
             varnames=('a', 'b'),

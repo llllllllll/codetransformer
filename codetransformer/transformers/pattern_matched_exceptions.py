@@ -1,9 +1,9 @@
-from sys import exc_info
+import sys
 
 from ..core import CodeTransformer
 from ..instructions import (
+    BUILD_TUPLE,
     CALL_FUNCTION,
-    CALL_FUNCTION_VAR,
     COMPARE_OP,
     LOAD_CONST,
     POP_TOP,
@@ -70,15 +70,47 @@ class pattern_matched_exceptions(CodeTransformer):
         super().__init__()
         self._matcher = matcher
 
-    @pattern(COMPARE_OP)
-    def _compare_op(self, instr):
-        if instr.equiv(COMPARE_OP.EXCEPTION_MATCH):
+    if sys.version_info < (3, 6):
+        from ..instructions import CALL_FUNCTION_VAR
+
+        def _match(self,
+                   instr,
+                   CALL_FUNCTION_VAR=CALL_FUNCTION_VAR):
             yield ROT_TWO().steal(instr)
             yield POP_TOP()
             yield LOAD_CONST(self._matcher)
             yield ROT_TWO()
-            yield LOAD_CONST(exc_info)
+            yield LOAD_CONST(sys.exc_info)
             yield CALL_FUNCTION(0)
             yield CALL_FUNCTION_VAR(1)
+
+        del CALL_FUNCTION_VAR
+    else:
+        from ..instructions import (
+            CALL_FUNCTION_EX,
+            BUILD_TUPLE_UNPACK_WITH_CALL,
+        )
+
+        def _match(self,
+                   instr,
+                   CALL_FUNCTION_EX=CALL_FUNCTION_EX,
+                   BUILD_TUPLE_UNPACK_WITH_CALL=BUILD_TUPLE_UNPACK_WITH_CALL):
+            yield ROT_TWO().steal(instr)
+            yield POP_TOP()
+            yield LOAD_CONST(self._matcher)
+            yield ROT_TWO()
+            yield BUILD_TUPLE(1)
+            yield LOAD_CONST(sys.exc_info)
+            yield CALL_FUNCTION(0)
+            yield BUILD_TUPLE_UNPACK_WITH_CALL(2)
+            yield CALL_FUNCTION_EX(0)
+
+        del CALL_FUNCTION_EX
+        del BUILD_TUPLE_UNPACK_WITH_CALL
+
+    @pattern(COMPARE_OP)
+    def _compare_op(self, instr):
+        if instr.equiv(COMPARE_OP.EXCEPTION_MATCH):
+            yield from self._match(instr)
         else:
             yield instr

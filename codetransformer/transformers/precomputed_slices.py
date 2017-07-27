@@ -13,14 +13,14 @@ class precomputed_slices(CodeTransformer):
     >>> def first_five(l):
     ...     return l[:5]
     ...
-    >>> dis(first_five)
+    >>> dis(first_five)  # doctest: +SKIP
       2           0 LOAD_FAST                0 (l)
                   3 LOAD_CONST               0 (None)
                   6 LOAD_CONST               1 (5)
                   9 BUILD_SLICE              2
                  12 BINARY_SUBSCR
                  13 RETURN_VALUE
-    >>> dis(precomputed_slices()(first_five))
+    >>> dis(precomputed_slices()(first_five))  # doctest: +SKIP
       2           0 LOAD_FAST                0 (l)
                   3 LOAD_CONST               0 (slice(None, 5, None))
                   6 BINARY_SUBSCR

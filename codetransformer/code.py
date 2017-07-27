@@ -4,6 +4,7 @@ from enum import IntEnum, unique
 from functools import reduce
 from itertools import repeat
 import operator as op
+import sys
 from types import CodeType
 
 from .instructions import (
@@ -16,6 +17,48 @@ from .instructions import (
 from .utils.functional import scanl, reverse_dict, ffill
 from .utils.immutable import lazyval
 from .utils.instance import instance
+
+
+WORDCODE = sys.version_info >= (3, 6)
+if WORDCODE:
+    argsize = 1
+    max_lnotab_increment = 127
+
+    def _sparse_args(instrs):
+        for instr in instrs:
+            yield instr
+            yield None
+
+else:
+    argsize = 2
+    max_lnotab_increment = 255
+
+    def _sparse_args(instrs):
+        for instr in instrs:
+            yield instr
+            if instr.have_arg:
+                yield None
+                yield None
+
+
+_sparse_args.__doc__ = """\
+Makes the arguments sparse so that instructions live at the correct index for
+the jump resolution step.
+
+This pads the instruction set with None to mark the bytes occupied by
+arguments.
+
+Parameters
+----------
+instrs : iterable of Instruction
+    The dense instruction set.
+
+Yields
+------
+sparse : Instruction or None
+    Yields the instructions, with objects marking the bytes that are used for
+    arguments.
+"""
 
 
 @unique
@@ -145,31 +188,6 @@ class Flag(IntEnum):
             (k, bool(mask & getattr(cls, k)))
             for k, v in cls.__members__.items()
         )
-
-
-def _sparse_args(instrs):
-    """Makes the arguments sparse so that instructions live at the correct
-    index for the jump resolution step.
-
-    This pads the instruction set with None to mark the bytes occupied by
-    arguments.
-
-    Parameters
-    ----------
-    instrs : iterable of Instruction
-        The dense instruction set.
-
-    Yields
-    ------
-    sparse : Instruction or None
-        Yields the instructions, with objects marking the bytes that are used
-        for arguments.
-    """
-    for instr in instrs:
-        yield instr
-        if instr.have_arg:
-            yield None
-            yield None
 
 
 def _freevar_argname(arg, cellvars, freevars):
@@ -437,7 +455,7 @@ class Code:
             if instr.absjmp:
                 instr.arg = sparse_instrs[instr.arg]
             elif instr.reljmp:
-                instr.arg = sparse_instrs[instr.arg + idx + 3]
+                instr.arg = sparse_instrs[instr.arg + idx + argsize + 1]
             elif isinstance(instr, LOAD_CONST):
                 instr.arg = co.co_consts[instr.arg]
             elif instr.uses_name:
@@ -510,44 +528,58 @@ class Code:
             bc.append(instr.opcode)  # Write the opcode byte.
             if isinstance(instr, LOAD_CONST):
                 # Resolve the constant index.
-                bc.extend(consts.index(instr.arg).to_bytes(2, 'little'))
+                bc.extend(consts.index(instr.arg).to_bytes(argsize, 'little'))
             elif instr.uses_name:
                 # Resolve the name index.
-                bc.extend(names.index(instr.arg).to_bytes(2, 'little'))
+                bc.extend(names.index(instr.arg).to_bytes(argsize, 'little'))
             elif instr.uses_varname:
                 # Resolve the local variable index.
-                bc.extend(varnames.index(instr.arg).to_bytes(2, 'little'))
+                bc.extend(
+                    varnames.index(instr.arg).to_bytes(argsize, 'little'),
+                )
             elif instr.uses_free:
                 # uses_free is really "uses freevars **or** cellvars".
                 try:
                     # look for the name in cellvars
-                    bc.extend(cellvars.index(instr.arg).to_bytes(2, 'little'))
+                    bc.extend(
+                        cellvars.index(instr.arg).to_bytes(argsize, 'little'),
+                    )
                 except ValueError:
                     # fall back to freevars, incrementing the length of
                     # cellvars.
                     bc.extend(
                         (freevars.index(instr.arg) + len(cellvars)).to_bytes(
-                            2, 'little'
+                            argsize,
+                            'little',
                         )
                     )
             elif instr.absjmp:
                 # Resolve the absolute jump target.
                 bc.extend(
-                    self.bytecode_offset(instr.arg).to_bytes(2, 'little'),
+                    self.bytecode_offset(instr.arg).to_bytes(
+                        argsize,
+                        'little',
+                    ),
                 )
             elif instr.reljmp:
                 # Resolve the relative jump target.
                 # We do this by subtracting the curren't instructions's
                 # sparse index from the sparse index of the argument.
-                # We then subtract 3 to account for the 3 bytes the
+                # We then subtract argsize - 1 to account for the bytes the
                 # current instruction takes up.
                 bytecode_offset = self.bytecode_offset
                 bc.extend((
-                    bytecode_offset(instr.arg) - bytecode_offset(instr) - 3
-                ).to_bytes(2, 'little',))
+                    bytecode_offset(instr.arg) -
+                    bytecode_offset(instr) -
+                    argsize -
+                    1
+                ).to_bytes(argsize, 'little',))
             elif instr.have_arg:
                 # Write any other arg here.
-                bc.extend(instr.arg.to_bytes(2, 'little'))
+                bc.extend(instr.arg.to_bytes(argsize, 'little'))
+            elif WORDCODE:
+                # with wordcode, all instructions are padded to 2 bytes
+                bc.append(0)
 
         return CodeType(
             self.argcount,
@@ -766,12 +798,12 @@ class Code:
 
             delta = lno - prev_lno
             py_lnotab.append(addr - prev_instr)
-            py_lnotab.append(min(delta, 255))
-            delta -= 255
+            py_lnotab.append(min(delta, max_lnotab_increment))
+            delta -= max_lnotab_increment
             while delta > 0:
                 py_lnotab.append(0)
-                py_lnotab.append(min(delta, 255))
-                delta -= 255
+                py_lnotab.append(min(delta, max_lnotab_increment))
+                delta -= max_lnotab_increment
 
             prev_lno = lno
             prev_instr = addr

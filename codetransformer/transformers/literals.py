@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from decimal import Decimal
 from itertools import islice
+import sys
 from textwrap import dedent
 
 from .. import instructions
@@ -86,7 +87,7 @@ class overloaded_dicts(CodeTransformer):
 
         yield instr
 
-    if hasattr(instructions, 'STORE_MAP'):
+    if sys.version_info[:2] <= (3, 4):
         # Python 3.4
 
         @pattern(instructions.BUILD_MAP)
@@ -160,6 +161,34 @@ class overloaded_dicts(CodeTransformer):
             # TOS1 = self._construct_map
 
             yield instructions.CALL_FUNCTION(1)
+
+    if sys.version_info >= (3, 6):
+        def _construct_const_map(self, values, keys):
+            mapping = self.astype()
+            for key, value in zip(keys, values):
+                mapping[key] = value
+            return mapping
+
+        @pattern(instructions.LOAD_CONST, instructions.BUILD_CONST_KEY_MAP)
+        def _build_const_map(self, keys, instr):
+            yield instructions.BUILD_TUPLE(len(keys.arg)).steal(keys)
+            # TOS  = (v0, v1, ..., vn)
+
+            yield keys
+            # TOS  = (k0, k1, ..., kn)
+            # TOS1 = (v0, v1, ..., vn)
+
+            yield instructions.LOAD_CONST(self._construct_const_map)
+            # TOS  = self._construct_const_map
+            # TOS1 = (k0, k1, ..., kn)
+            # TOS2 = (v0, v1, ..., vn)
+
+            yield instructions.ROT_THREE()
+            # TOS  = (k0, k1, ..., kn)
+            # TOS1 = (v0, v1, ..., vn)
+            # TOS2 = self._construct_const_map
+
+            yield instructions.CALL_FUNCTION(2)
 
 
 ordereddict_literals = overloaded_dicts(OrderedDict)
@@ -381,6 +410,7 @@ def overloaded_build(type_, add_name=None):
         dict_,
     )
 
+
 overloaded_slices = overloaded_build(slice)
 overloaded_lists = overloaded_build(list, 'append')
 overloaded_sets = overloaded_build(set, 'add')
@@ -394,6 +424,7 @@ def transform_consts(self, consts):
         self.xform(set(const)) if isinstance(const, frozenset) else const
         for const in consts
     )
+
 
 overloaded_sets.transform_consts = transform_consts
 del transform_consts
@@ -410,6 +441,7 @@ def transform_consts(self, consts):
         self.xform(const) if isinstance(const, tuple) else const
         for const in consts
     )
+
 
 overloaded_tuples.transform_consts = transform_consts
 del transform_consts

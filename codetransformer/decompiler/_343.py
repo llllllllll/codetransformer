@@ -1351,6 +1351,7 @@ def _binop_handler(nodetype):
         return ast.BinOp(left=left, op=nodetype(), right=right)
     return _handler
 
+
 for instrtype, nodetype in binops:
     _process_instr.register(instrtype)(_push)
     _make_expr_internal.register(instrtype)(_binop_handler(nodetype))

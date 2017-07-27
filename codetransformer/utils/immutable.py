@@ -291,6 +291,8 @@ def __setattr__(self, name, value):
     if self not in __setattr__._initializing:
         raise AttributeError('cannot mutate immutable object')
     object_setattr(self, name, value)
+
+
 __setattr__._initializing = set()
 
 
