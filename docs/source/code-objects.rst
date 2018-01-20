@@ -37,7 +37,7 @@ object and inspect its contents::
     (2,)
 
 We can convert our Code object back into its raw form via the
-:meth:`~codetransformer.code.Code.to_bytecode` method::
+:meth:`~codetransformer.code.Code.to_pycode` method::
 
     >>> co.to_pycode()
     <code object add2 at 0x7f6ba05f2030, file "<stdin>", line 1>
