@@ -64,30 +64,29 @@ def _vartype(self):
 
 
 class InstructionMeta(ABCMeta, matchable):
-    _marker = object()  # sentinel
     _type_cache = {}
 
-    def __init__(self, *args, opcode=None):
+    def __init__(self, *args, opcode=None, synthetic=False):
         return super().__init__(*args)
 
-    def __new__(mcls, name, bases, dict_, *, opcode=None):
+    def __new__(mcls, name, bases, dict_, *, opcode=None, synthetic=False):
         try:
             return mcls._type_cache[opcode]
         except KeyError:
             pass
 
-        if len(bases) != 1:
+        if len(bases) > 1:
             raise TypeError(
                 '{} does not support multiple inheritance'.format(
                     mcls.__name__,
                 ),
             )
 
-        if bases[0] is mcls._marker:
+        if synthetic:
             dict_['_reprname'] = immutableattr(name)
             for attr in ('absjmp', 'have_arg', 'opcode', 'opname', 'reljmp'):
                 dict_[attr] = _notimplemented(attr)
-            return super().__new__(mcls, name, (object,), dict_)
+            return super().__new__(mcls, name, bases, dict_)
 
         if opcode not in opmap.values():
             raise TypeError('Invalid opcode: {}'.format(opcode))
@@ -123,7 +122,45 @@ class InstructionMeta(ABCMeta, matchable):
     __str__ = __repr__
 
 
-class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
+class JumpTarget:
+    """Base class for objects that can be targets of jump instructions.
+
+    This is the base for both Instruction and Label.
+    """
+
+    def __init__(self):
+        self._target_of = set()
+        self._stolen_by = None  # used for lnotab recalculation
+
+    def steal(self, instr):
+        """Steal the jump index off of `instr`.
+
+        This makes anything that would have jumped to `instr` jump to
+        this Instruction instead.
+
+        Parameters
+        ----------
+        instr : JumpTarget
+            The target to steal the jump sources from.
+
+        Returns
+        -------
+        self : JumpTarget
+            The object that owns this method.
+
+        Notes
+        -----
+        This mutates self and ``instr`` inplace.
+        """
+        instr._stolen_by = self
+        for jmp in instr._target_of:
+            jmp.arg = self
+        self._target_of = instr._target_of
+        instr._target_of = set()
+        return self
+
+
+class Instruction(JumpTarget, metaclass=InstructionMeta, synthetic=True):
     """
     Base class for all instruction types.
 
@@ -139,13 +176,12 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
     _no_arg = no_default
 
     def __init__(self, arg=_no_arg):
+        super().__init__()
         if self.have_arg and arg is self._no_arg:
             raise TypeError(
                 "{} missing 1 required argument: 'arg'".format(self.opname),
             )
         self.arg = self._normalize_arg(arg)
-        self._target_of = set()
-        self._stolen_by = None  # used for lnotab recalculation
 
     def __repr__(self):
         arg = self.arg
@@ -157,33 +193,6 @@ class Instruction(InstructionMeta._marker, metaclass=InstructionMeta):
     @staticmethod
     def _normalize_arg(arg):
         return arg
-
-    def steal(self, instr):
-        """Steal the jump index off of `instr`.
-
-        This makes anything that would have jumped to `instr` jump to
-        this Instruction instead.
-
-        Parameters
-        ----------
-        instr : Instruction
-            The instruction to steal the jump sources from.
-
-        Returns
-        -------
-        self : Instruction
-            The instruction that owns this method.
-
-        Notes
-        -----
-        This mutates self and ``instr`` inplace.
-        """
-        instr._stolen_by = self
-        for jmp in instr._target_of:
-            jmp.arg = self
-        self._target_of = instr._target_of
-        instr._target_of = set()
-        return self
 
     @classmethod
     def from_opcode(cls, opcode, arg=_no_arg):
@@ -302,13 +311,13 @@ def _call_repr(self):
 
 
 def _check_jmp_arg(self, arg):
-    if not isinstance(arg, (Instruction, _RawArg)):
+    if not isinstance(arg, (JumpTarget, _RawArg)):
         raise TypeError(
-            'argument to %s must be an instruction, got: %r' % (
+            'argument to %s must be a valid jump target, got: %r' % (
                 type(self).__name__, arg,
             ),
         )
-    if isinstance(arg, Instruction):
+    if isinstance(arg, JumpTarget):
         arg._target_of.add(self)
     return arg
 
@@ -422,6 +431,18 @@ for name, opcode in opmap.items():
     )
 
     del class_
+
+
+class Label(JumpTarget):
+    """A "pseudo-instruction" that can be the target of a jump instruction.
+    """
+
+    def __init__(self, debug_name='anonymous'):
+        super().__init__()
+        self.debug_name = debug_name
+
+    def __repr__(self):
+        return "Label({!r})".format(self.debug_name)
 
 
 # Clean up the namespace

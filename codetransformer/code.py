@@ -344,20 +344,17 @@ class Code:
                 if kwarg is not None:
                     raise ValueError('cannot specify **kwargs more than once')
                 kwarg = argname[2:]
+                append_argname(argname)
                 continue
             elif argname.startswith('*'):
                 if varg is not None:
                     raise ValueError('cannot specify *args more than once')
                 varg = argname[1:]
                 argcounter = kwonlyargcount  # all following args are kwonly.
+                append_argname(argname)
                 continue
             argcounter[0] += 1
             append_argname(argname)
-
-        if varg is not None:
-            append_argname(varg)
-        if kwarg is not None:
-            append_argname(kwarg)
 
         cellvar_names = set(cellvars)
         freevar_names = set(freevars)
