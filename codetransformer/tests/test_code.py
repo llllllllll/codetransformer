@@ -7,7 +7,12 @@ import sys
 import pytest
 
 from codetransformer.code import Code, Flag, pycode
-from codetransformer.instructions import LOAD_CONST, LOAD_FAST, uses_free
+from codetransformer.instructions import (
+    LOAD_CONST,
+    LOAD_FAST,
+    RETURN_VALUE,
+    uses_free,
+)
 
 
 @pytest.fixture(scope='module')
@@ -178,7 +183,7 @@ def abc_code():
     a = LOAD_CONST('a')
     b = LOAD_CONST('b')
     c = LOAD_CONST('c')  # not in instrs
-    code = Code((a, b), argnames=())
+    code = Code((a, b), param_signature=())
 
     return (a, b, c), code
 
@@ -220,3 +225,26 @@ def test_code_dis(capsys):
     buf = StringIO()
     code.dis(file=buf)
     assert buf.getvalue() == expected
+
+
+@pytest.mark.parametrize(
+    'param_signature, has_varargs, has_varkeywords', (
+        (('a',), False, False),
+        (('a', 'b'), False, False),
+        (('a', 'b', '*c'), True, False),
+        (('a', 'b', '**c'), False, True),
+        (('a', 'b', '*', 'c'), False, False),
+        (('a', 'b', '*c', 'd'), True, False),
+        (('a', 'b', '*c', '**d'), True, True),
+        (('a', 'b', '*c', 'd', '**e'), True, True),
+    ),
+)
+def test_param_signature(param_signature, has_varargs, has_varkeywords):
+    code = Code(
+        (LOAD_CONST(None), RETURN_VALUE()),
+        param_signature=param_signature,
+    )
+    assert code.param_signature == param_signature
+
+    assert code.flags['CO_VARARGS'] == has_varargs
+    assert code.flags['CO_VARKEYWORDS'] == has_varkeywords

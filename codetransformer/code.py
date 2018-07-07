@@ -266,8 +266,9 @@ class Code:
     ----------
     instrs : iterable of Instruction
         A sequence of codetransformer Instruction objects.
-    argnames : iterable of str, optional
-        The names of the arguments to the code object.
+    param_signature : iterable of str, optional
+        The names of the parameters to the code object. If a parameter name
+        starts with * or ** it will be interpreted as the vararg or varkeyword.
     name : str, optional
         The name of this code object.
     filename : str, optional
@@ -298,6 +299,7 @@ class Code:
     lnotab
     name
     names
+    param_signature
     py_lnotab
     sparse_instrs
     stacksize
@@ -306,6 +308,7 @@ class Code:
     __slots__ = (
         '_instrs',
         '_argnames',
+        '_param_signature',
         '_argcount',
         '_kwonlyargcount',
         '_cellvars',
@@ -320,7 +323,7 @@ class Code:
 
     def __init__(self,
                  instrs,
-                 argnames=(),
+                 param_signature=(),
                  *,
                  cellvars=(),
                  freevars=(),
@@ -339,7 +342,7 @@ class Code:
         _argnames = []
         append_argname = _argnames.append
         varg = kwarg = None
-        for argname in argnames:
+        for argname in param_signature:
             if argname.startswith('**'):
                 if kwarg is not None:
                     raise ValueError('cannot specify **kwargs more than once')
@@ -348,7 +351,9 @@ class Code:
             elif argname.startswith('*'):
                 if varg is not None:
                     raise ValueError('cannot specify *args more than once')
-                varg = argname[1:]
+                if argname != '*':
+                    # lone star, not varg
+                    varg = argname[1:]
                 argcounter = kwonlyargcount  # all following args are kwonly.
                 continue
             argcounter[0] += 1
@@ -376,6 +381,7 @@ class Code:
 
         self._instrs = instrs
         self._argnames = tuple(_argnames)
+        self._param_signature = tuple(param_signature)
         self._argcount = argcount[0]
         self._kwonlyargcount = kwonlyargcount[0]
         self._cellvars = cellvars
@@ -497,7 +503,7 @@ class Code:
 
         return cls(
             filter(bool, sparse_instrs),
-            argnames=new_paramnames,
+            param_signature=new_paramnames,
             cellvars=co.co_cellvars,
             freevars=co.co_freevars,
             name=co.co_name,
@@ -618,7 +624,7 @@ class Code:
     def argcount(self):
         """The number of arguments this code object accepts.
 
-        This does not include varargs (\*args).
+        This does not include varargs (*args).
         """
         return self._argcount
 
@@ -626,7 +632,7 @@ class Code:
     def kwonlyargcount(self):
         """The number of keyword only arguments this code object accepts.
 
-        This does not include varkwargs (\*\*kwargs).
+        This does not include varkwargs (**kwargs).
         """
         return self._kwonlyargcount
 
@@ -664,6 +670,15 @@ class Code:
         where each group is optional.
         """
         return self._argnames
+
+    @property
+    def param_signature(self):
+        """The string signature for all the parameters to this code object.
+
+        Each parameter name is a string. The vararg will be prefixed with '*'
+        and the varkeyword will be prefixed with '**'.
+        """
+        return self._param_signature
 
     @property
     def varnames(self):

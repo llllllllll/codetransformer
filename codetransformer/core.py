@@ -193,7 +193,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
 
             return Code(
                 post_transform,
-                code.argnames,
+                code.param_signature,
                 cellvars=self.transform_cellvars(code.cellvars),
                 freevars=self.transform_freevars(code.freevars),
                 name=name if name is not None else code.name,

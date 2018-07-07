@@ -128,3 +128,49 @@ def test_no_context():
         c.context
 
     assert str(e.value) == 'no active transformation context'
+
+
+def test_nop():
+    result = object()
+
+    @CodeTransformer()
+    def f():
+        return result
+
+    assert f() is result
+
+    @CodeTransformer()
+    def f(a):
+        return a
+
+    assert f(result) is result
+
+    @CodeTransformer()
+    def f(a=result):
+        return a
+
+    assert f() is result
+
+    @CodeTransformer()
+    def f(*args):
+        return args[0]
+
+    assert f(result) is result
+
+    @CodeTransformer()
+    def f(*args, a):
+        return a
+
+    assert f(a=result) is result
+
+    @CodeTransformer()
+    def f(**kwargs):
+        return kwargs['a']
+
+    assert f(a=result) is result
+
+    @CodeTransformer()
+    def f(a, *b, c, **d):
+        return a, b, c, d
+
+    assert f(1, 2, c=3, d=4) == (1, (2,), 3, {'d': 4})
