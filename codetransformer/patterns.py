@@ -115,6 +115,13 @@ class var(modifier):
 
 
 @instance
+class var_nongreedy(modifier):
+    """Modifier that matches zero or more of a pattern.
+    """
+    _token = b'*?'
+
+
+@instance
 class plus(modifier):
     """Modifier that matches one or more of a pattern.
     """
@@ -156,6 +163,16 @@ class matchany(meta):
 
     def __repr__(self):
         return '...'
+
+
+@instance
+class end(meta):
+    """Matchable that matches the end of instructions
+    """
+    _token = b'$'
+
+    def __repr__(self):
+        return '$'
 
 
 class seq(immutable, matchable):

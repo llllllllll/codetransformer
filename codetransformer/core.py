@@ -144,6 +144,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
     transform_freevars = _id
     transform_cellvars = _id
     transform_defaults = _id
+    transform_argnames = _id
 
     del _id
 
@@ -193,7 +194,7 @@ class CodeTransformer(metaclass=CodeTransformerMeta):
 
             return Code(
                 post_transform,
-                code.argnames,
+                self.transform_argnames(code.argnames),
                 cellvars=self.transform_cellvars(code.cellvars),
                 freevars=self.transform_freevars(code.freevars),
                 name=name if name is not None else code.name,
