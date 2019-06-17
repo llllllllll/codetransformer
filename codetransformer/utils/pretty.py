@@ -214,10 +214,15 @@ def d(obj, mode='exec', file=None):
     if file is None:
         file = sys.stdout
 
+    if sys.version_info >= (3, 7):
+        dis_f = partial(dis.dis, depth=0)
+    else:
+        dis_f = dis.dis
+
     for name, co in walk_code(extract_code(obj, compile_mode=mode)):
         print(name, file=file)
         print('-' * len(name), file=file)
-        dis.dis(co, file=file)
+        dis_f(co, file=file)
         print('', file=file)
 
 
